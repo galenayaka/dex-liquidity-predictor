@@ -24,6 +24,12 @@ class Settings(BaseSettings):
     environment: str = "development"
     cors_origins: list[str] = ["http://localhost:3000", "http://127.0.0.1:3000"]
 
+    # --- Database ------------------------------------------------------- #
+    # PostgreSQL connection URL for SQLAlchemy 2.0 (psycopg driver).
+    database_url: str = (
+        "postgresql+psycopg://postgres:postgres@localhost:5432/dex_predictor"
+    )
+
     # --- Web3 ----------------------------------------------------------- #
     # When True the backend runs fully offline against synthetic data.
     mock_mode: bool = True

@@ -19,6 +19,7 @@ from .core.config import get_settings
 from .core.container import get_event_listener, get_store, get_ws_manager
 from .core.exceptions import AppError
 from .core.logging import setup_logging
+from .db.database import init_db
 from .tasks.monitor import MonitorService
 
 logger = logging.getLogger(__name__)
@@ -29,6 +30,12 @@ setup_logging(settings.debug)
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    try:
+        init_db()
+        logger.info("Database tables initialized")
+    except Exception:  # noqa: BLE001 - PostgreSQL may be offline in dev/mock mode
+        logger.warning("Skipped database initialization (PostgreSQL unreachable)")
+
     monitor = MonitorService()
     event_listener = get_event_listener()
     monitor_task = asyncio.create_task(monitor.run())
