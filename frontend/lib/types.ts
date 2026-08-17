@@ -63,4 +63,10 @@ export interface SnapshotMessage {
   data: PoolState[];
 }
 
+/** A single time-series sample for the liquidity chart. */
+export interface LiquidityPoint {
+  time: number; // unix timestamp (seconds)
+  value: number;
+}
+
 export type WSMessage = EventMessage | AlertMessage | SnapshotMessage;

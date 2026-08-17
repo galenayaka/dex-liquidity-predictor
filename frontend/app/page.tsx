@@ -2,6 +2,7 @@
 
 import { useMemo } from "react";
 import AlertBanner from "@/components/AlertBanner";
+import LiquidityChart from "@/components/LiquidityChart";
 import PredictionPanel from "@/components/PredictionPanel";
 import PricePanel from "@/components/PricePanel";
 import Sidebar from "@/components/Sidebar";
@@ -9,6 +10,7 @@ import { useWebSocket } from "@/hooks/useWebSocket";
 import type {
   AlertMessage,
   EventMessage,
+  LiquidityPoint,
   PoolState,
 } from "@/lib/types";
 
@@ -44,6 +46,27 @@ export default function Dashboard() {
     return lastMessage.timestamp;
   }, [lastMessage]);
 
+  const liquiditySeries = useMemo<LiquidityPoint[]>(() => {
+    const points: LiquidityPoint[] = [];
+    let lastTime = 0;
+    for (const message of messages) {
+      if (message.type !== "event") continue;
+      const raw = message.args?.liquidity;
+      const value =
+        typeof raw === "string"
+          ? Number(raw)
+          : typeof raw === "number"
+            ? raw
+            : Number.NaN;
+      if (!Number.isFinite(value) || value <= 0) continue;
+      let time = message.timestamp;
+      if (time <= lastTime) time = lastTime + 1;
+      lastTime = time;
+      points.push({ time, value: value / 1e18 });
+    }
+    return points;
+  }, [messages]);
+
   return (
     <div className="flex h-screen w-full bg-slate-950 text-slate-100">
       <Sidebar status={status} />
@@ -74,6 +97,8 @@ export default function Dashboard() {
             </div>
             <PredictionPanel event={latestEvent} alert={latestAlert} />
           </div>
+
+          <LiquidityChart data={liquiditySeries} />
         </div>
       </main>
     </div>
