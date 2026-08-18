@@ -15,6 +15,9 @@ interface LiquidityChartProps {
   /** Append-only time series; only new points are pushed into the chart. */
   data: LiquidityPoint[];
   title?: string;
+  subtitle?: string;
+  /** Show the pulsing "Live" badge (disable for historical views). */
+  live?: boolean;
   height?: number;
 }
 
@@ -32,6 +35,8 @@ function toPoint(point: LiquidityPoint): { time: UTCTimestamp; value: number } {
 export default function LiquidityChart({
   data,
   title = "Pool Liquidity",
+  subtitle = "Real-time pool liquidity movements (×10¹⁸)",
+  live = true,
   height = 280,
 }: LiquidityChartProps) {
   const containerRef = useRef<HTMLDivElement | null>(null);
@@ -131,17 +136,17 @@ export default function LiquidityChart({
       <div className="mb-4 flex items-center justify-between">
         <div>
           <h3 className="font-semibold text-slate-100">{title}</h3>
-          <p className="text-xs text-slate-400">
-            Real-time pool liquidity movements (×10¹⁸)
-          </p>
+          <p className="text-xs text-slate-400">{subtitle}</p>
         </div>
-        <span className="inline-flex items-center gap-1.5 text-xs text-emerald-300">
-          <span
-            className="h-2 w-2 animate-pulse rounded-full bg-emerald-400"
-            aria-hidden="true"
-          />
-          Live
-        </span>
+        {live && (
+          <span className="inline-flex items-center gap-1.5 text-xs text-emerald-300">
+            <span
+              className="h-2 w-2 animate-pulse rounded-full bg-emerald-400"
+              aria-hidden="true"
+            />
+            Live
+          </span>
+        )}
       </div>
       <div ref={containerRef} style={{ height }} className="w-full" />
     </section>

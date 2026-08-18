@@ -1,3 +1,6 @@
+# Serve the static dashboard (index.html) before Laravel's front controller.
+DirectoryIndex index.html index.php
+
 <IfModule mod_rewrite.c>
     <IfModule mod_negotiation.c>
         Options -MultiViews -Indexes

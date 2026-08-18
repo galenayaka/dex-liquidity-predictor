@@ -12,11 +12,13 @@ import asyncio
 import logging
 import random
 import time
+from datetime import datetime, timezone
 from typing import Any
 
 from web3 import AsyncWeb3, Web3
 
 from ..core.config import Settings
+from ..db.crud import save_metrics_to_db
 from ..services.liquidity_predictor import LiquidityPredictor
 from ..websocket.manager import ConnectionManager
 
@@ -103,6 +105,8 @@ class UniswapV3EventListener:
         self._stop = asyncio.Event()
         # Notional USD depth, updated on each Swap and reused for Burn events.
         self._last_depth_usd: float = 50_000_000.0
+        # Last implied WETH-side reserve (token B), reused for Burn events.
+        self._last_token_b_reserve: float | None = None
         # Cached gas price (wei) to avoid an RPC round-trip per event.
         self._gas_price: int = 0
         self._gas_price_ts: float = 0.0
@@ -177,8 +181,9 @@ class UniswapV3EventListener:
             logger.warning("Failed to decode %s log: %s", event_name, exc)
             return
 
-        prediction = self._run_prediction(event_name, args, self._gas_price)
-        await self._broadcast_event(event_name, log, args, prediction)
+        result = self._run_prediction(event_name, args, self._gas_price)
+        self._save_metric(result)
+        await self._broadcast_event(event_name, log, args, result["prediction"])
 
     async def _broadcast_event(
         self,
@@ -215,7 +220,7 @@ class UniswapV3EventListener:
     def _run_prediction(
         self, event_name: str, args: dict[str, Any], gas_price: int
     ) -> dict[str, Any]:
-        """Convert decoded event args into model inputs and run inference."""
+        """Run inference and return the prediction plus the metric inputs."""
         if event_name == "Swap":
             amount0 = abs(_as_int(args.get("amount0", 0)))
             liquidity = _as_int(args.get("liquidity", 0))
@@ -223,22 +228,50 @@ class UniswapV3EventListener:
 
             # token0 of the watched pool is USDC (6 decimals) -> USD-equivalent.
             swap_volume = amount0 / 1e6
+            token_b_reserve: float | None = None
             if sqrt_price_x96 > 0 and liquidity > 0:
                 sqrt_raw = sqrt_price_x96 / _Q96
+                # Implied reserves from current price + in-range liquidity:
+                # token A (USDC) and token B (WETH), in human units.
                 self._last_depth_usd = liquidity / sqrt_raw / 1e6
+                token_b_reserve = liquidity * sqrt_raw / 1e18
+                self._last_token_b_reserve = token_b_reserve
             reserve_depth = self._last_depth_usd
+            token_a_reserve = reserve_depth
             context = {"event": "Swap", "liquidity_change_pct": 0.0}
         else:  # Burn
             amount0 = abs(_as_int(args.get("amount0", 0)))
             swap_volume = amount0 / 1e6
             reserve_depth = self._last_depth_usd
+            token_a_reserve = reserve_depth
+            token_b_reserve = self._last_token_b_reserve
             context = {"event": "Burn", "liquidity_change_pct": None}
 
-        return self._predictor.predict(
+        prediction = self._predictor.predict(
             swap_volume=swap_volume,
             reserve_depth=reserve_depth,
             gas_price=float(gas_price),
             context=context,
+        )
+
+        return {
+            "prediction": prediction,
+            "swap_volume": swap_volume,
+            "token_a_reserve": token_a_reserve,
+            "token_b_reserve": token_b_reserve,
+        }
+
+    def _save_metric(self, result: dict[str, Any]) -> None:
+        """Persist one metric row right after inference (before broadcast)."""
+        prediction = result["prediction"]
+        save_metrics_to_db(
+            pool_address=self._settings.uniswap_v3_pool_eth_usdc,
+            time=datetime.now(timezone.utc),
+            token_a_reserve=result["token_a_reserve"],
+            token_b_reserve=result["token_b_reserve"],
+            swap_volume=result["swap_volume"],
+            predicted_drain=prediction["predicted_drain_percentage"],
+            predicted_price_impact=prediction["predicted_price_impact"],
         )
 
     # ------------------------------------------------------------------ #
@@ -286,8 +319,9 @@ class UniswapV3EventListener:
                 "data": "0x",
                 "logIndex": rng.randint(0, 200),
             }
-            prediction = self._run_prediction(kind, args, gas_price)
-            await self._broadcast_event(kind, log, args, prediction)
+            result = self._run_prediction(kind, args, gas_price)
+            self._save_metric(result)
+            await self._broadcast_event(kind, log, args, result["prediction"])
 
     @staticmethod
     def _fake_address(rng: random.Random) -> str:

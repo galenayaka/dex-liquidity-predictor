@@ -1,12 +1,15 @@
 """SQLAlchemy 2.0 database connection configuration (PostgreSQL)."""
 from __future__ import annotations
 
+import logging
 from collections.abc import Generator
 
 from sqlalchemy import create_engine
 from sqlalchemy.orm import DeclarativeBase, Session, sessionmaker
 
 from ..core.config import get_settings
+
+logger = logging.getLogger(__name__)
 
 settings = get_settings()
 
@@ -47,3 +50,23 @@ def init_db() -> None:
     from . import models  # noqa: F401
 
     Base.metadata.create_all(bind=engine)
+    _init_hypertable()
+
+
+def _init_hypertable() -> None:
+    """Convert liquidity_metrics into a TimescaleDB hypertable when available."""
+    from sqlalchemy import text
+
+    try:
+        with engine.begin() as conn:
+            conn.execute(
+                text(
+                    "SELECT create_hypertable("
+                    "'liquidity_metrics', 'time', if_not_exists => TRUE)"
+                )
+            )
+        logger.info("TimescaleDB hypertable ready for liquidity_metrics")
+    except Exception:  # noqa: BLE001 - extension may not be installed
+        logger.debug(
+            "TimescaleDB unavailable; liquidity_metrics stays a plain table"
+        )

@@ -2,12 +2,19 @@
 
 import type { ConnectionStatus } from "@/hooks/useWebSocket";
 
-const NAV_ITEMS = [
-  { label: "Dashboard", href: "#", active: true },
-  { label: "Pools", href: "#" },
-  { label: "Predictions", href: "#" },
-  { label: "Alerts", href: "#" },
-  { label: "Settings", href: "#" },
+export type View =
+  | "dashboard"
+  | "pools"
+  | "predictions"
+  | "alerts"
+  | "settings";
+
+const NAV_ITEMS: { key: View; label: string }[] = [
+  { key: "dashboard", label: "Dashboard" },
+  { key: "pools", label: "Pools" },
+  { key: "predictions", label: "Predictions" },
+  { key: "alerts", label: "Alerts" },
+  { key: "settings", label: "Settings" },
 ];
 
 function statusStyles(status: ConnectionStatus): { dot: string; label: string } {
@@ -23,7 +30,13 @@ function statusStyles(status: ConnectionStatus): { dot: string; label: string } 
   }
 }
 
-export default function Sidebar({ status }: { status: ConnectionStatus }) {
+interface SidebarProps {
+  status: ConnectionStatus;
+  active: View;
+  onNavigate: (view: View) => void;
+}
+
+export default function Sidebar({ status, active, onNavigate }: SidebarProps) {
   const statusInfo = statusStyles(status);
 
   return (
@@ -37,17 +50,18 @@ export default function Sidebar({ status }: { status: ConnectionStatus }) {
 
       <nav className="flex-1 space-y-1 p-3">
         {NAV_ITEMS.map((item) => (
-          <a
-            key={item.label}
-            href={item.href}
-            className={`block rounded-md px-3 py-2 text-sm transition-colors ${
-              item.active
+          <button
+            key={item.key}
+            type="button"
+            onClick={() => onNavigate(item.key)}
+            className={`block w-full rounded-md px-3 py-2 text-left text-sm transition-colors ${
+              item.key === active
                 ? "bg-slate-800 font-medium text-white"
                 : "text-slate-400 hover:bg-slate-800/60 hover:text-slate-200"
             }`}
           >
             {item.label}
-          </a>
+          </button>
         ))}
       </nav>
 
