@@ -3,6 +3,7 @@
 import { useMemo, useState } from "react";
 import AlertBanner from "@/components/AlertBanner";
 import AlertsView from "@/components/AlertsView";
+import CommandLine from "@/components/CommandLine";
 import Explain from "@/components/Explain";
 import LiquidityChart from "@/components/LiquidityChart";
 import PoolsView from "@/components/PoolsView";
@@ -35,7 +36,7 @@ const VIEW_TITLES: Record<View, { title: string; subtitle: string }> = {
   },
   price: {
     title: "Price Prediction",
-    subtitle: "Next-day BTC/ETH price forecast from the ML service",
+    subtitle: "Next-day forecasts for BTC · ETH · SOL · BNB · XRP",
   },
   alerts: {
     title: "Alerts",
@@ -49,6 +50,10 @@ const VIEW_TITLES: Record<View, { title: string; subtitle: string }> = {
 
 export default function Dashboard() {
   const [view, setView] = useState<View>("dashboard");
+  const [predictRequest, setPredictRequest] = useState<{
+    ticker: string;
+    ts: number;
+  } | null>(null);
   const { status, lastMessage, messages } = useWebSocket();
 
   const pools = useMemo<PoolState[]>(() => {
@@ -107,11 +112,23 @@ export default function Dashboard() {
 
   const heading = VIEW_TITLES[view];
 
-  return (
-    <div className="flex h-screen w-full bg-black text-noir-text">
-      <Sidebar status={status} active={view} onNavigate={setView} />
+  const handlePredictTicker = (ticker: string) => {
+    setView("price");
+    setPredictRequest({ ticker, ts: Date.now() });
+  };
 
-      <main className="flex-1 overflow-y-auto">
+  return (
+    <div className="flex h-screen w-full flex-col bg-black text-noir-text">
+      <div className="flex min-h-0 flex-1">
+        <Sidebar
+          status={status}
+          active={view}
+          onNavigate={setView}
+          monitorActive={predictRequest?.ticker ?? "btc"}
+          onPredictTicker={handlePredictTicker}
+        />
+
+        <main className="flex-1 overflow-y-auto">
         <div className="space-y-3 p-3">
           <header className="flex flex-wrap items-end justify-between gap-2 border-b border-noir-line pb-2">
             <div>
@@ -180,11 +197,16 @@ export default function Dashboard() {
 
           {view === "pools" && <PoolsView pools={pools} />}
           {view === "predictions" && <PredictionsView events={events} />}
-          {view === "price" && <PricePredictionView />}
+          {view === "price" && (
+            <PricePredictionView command={predictRequest} />
+          )}
           {view === "alerts" && <AlertsView alerts={alerts} events={events} />}
           {view === "settings" && <SettingsView status={status} />}
-        </div>
-      </main>
+          </div>
+        </main>
+      </div>
+
+      <CommandLine onPredict={handlePredictTicker} />
     </div>
   );
 }

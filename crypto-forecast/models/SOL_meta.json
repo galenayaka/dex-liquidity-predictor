@@ -1,0 +1,21 @@
+{
+  "ticker": "sol",
+  "features": [
+    "open",
+    "high",
+    "low",
+    "close",
+    "volume",
+    "sp500_close",
+    "dxy",
+    "gold",
+    "treasury_10y",
+    "gpr"
+  ],
+  "target_type": "regression",
+  "metrics": {
+    "mae": 19.253507724801022,
+    "rmse": 21.682755155913497,
+    "r2": 0.4101916054616489
+  }
+}

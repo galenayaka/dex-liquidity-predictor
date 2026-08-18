@@ -12,10 +12,17 @@ BASE_DIR = Path(__file__).resolve().parent
 DATA_DIR = BASE_DIR / "data"
 MODEL_DIR = BASE_DIR / "models"
 
-# Supported tickers (normalised key -> yfinance symbol).
-TICKERS: dict[str, str] = {
-    "btc": "BTC-USD",
-    "eth": "ETH-USD",
+# Binance public REST base URL (market data needs no API key).
+BINANCE_BASE_URL = os.getenv("BINANCE_BASE_URL", "https://api.binance.com/api/v3")
+
+# Dynamic ticker registry: normalised key -> exchange symbol + yfinance fallback.
+# OHLCV is pulled from Binance first and falls back to yfinance when offline.
+TICKERS: dict[str, dict[str, str]] = {
+    "btc": {"binance": "BTCUSDT", "yfinance": "BTC-USD", "name": "Bitcoin"},
+    "eth": {"binance": "ETHUSDT", "yfinance": "ETH-USD", "name": "Ethereum"},
+    "sol": {"binance": "SOLUSDT", "yfinance": "SOL-USD", "name": "Solana"},
+    "bnb": {"binance": "BNBUSDT", "yfinance": "BNB-USD", "name": "BNB"},
+    "xrp": {"binance": "XRPUSDT", "yfinance": "XRP-USD", "name": "XRP"},
 }
 
 # Macro / equity series via yfinance (used when no FRED key is provided).
@@ -45,6 +52,6 @@ FEATURE_COLUMNS: list[str] = [
     "sp500_close", "dxy", "gold", "treasury_10y", "gpr",
 ]
 
-TARGET_TYPE: str = os.getenv("TARGET_TYPE", "regression")
+TARGET_TYPE: str = "regression"  # the registry design is regression-only
 TRAIN_SPLIT: float = 0.8  # chronological 80/20 split (no shuffle)
 SEED: int = 42

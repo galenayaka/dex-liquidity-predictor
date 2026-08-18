@@ -1,0 +1,21 @@
+{
+  "ticker": "xrp",
+  "features": [
+    "open",
+    "high",
+    "low",
+    "close",
+    "volume",
+    "sp500_close",
+    "dxy",
+    "gold",
+    "treasury_10y",
+    "gpr"
+  ],
+  "target_type": "regression",
+  "metrics": {
+    "mae": 0.14210293317410727,
+    "rmse": 0.17221458780070487,
+    "r2": 0.8222071081695406
+  }
+}

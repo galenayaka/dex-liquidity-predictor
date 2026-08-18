@@ -1,5 +1,6 @@
 "use client";
 
+import MarketMonitor from "@/components/MarketMonitor";
 import type { ConnectionStatus } from "@/hooks/useWebSocket";
 
 export type View =
@@ -36,9 +37,17 @@ interface SidebarProps {
   status: ConnectionStatus;
   active: View;
   onNavigate: (view: View) => void;
+  monitorActive: string;
+  onPredictTicker: (ticker: string) => void;
 }
 
-export default function Sidebar({ status, active, onNavigate }: SidebarProps) {
+export default function Sidebar({
+  status,
+  active,
+  onNavigate,
+  monitorActive,
+  onPredictTicker,
+}: SidebarProps) {
   const live = status === "open";
   const statusInfo = statusStyles(status);
 
@@ -71,6 +80,8 @@ export default function Sidebar({ status, active, onNavigate }: SidebarProps) {
           </button>
         ))}
       </nav>
+
+      <MarketMonitor active={monitorActive} onPredict={onPredictTicker} />
 
       <div className="flex items-center gap-2 border-t border-noir-line px-3 py-2.5 text-[10px] uppercase tracking-[0.16em] text-noir-dim">
         <span

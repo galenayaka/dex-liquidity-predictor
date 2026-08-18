@@ -1,0 +1,21 @@
+{
+  "ticker": "btc",
+  "features": [
+    "open",
+    "high",
+    "low",
+    "close",
+    "volume",
+    "sp500_close",
+    "dxy",
+    "gold",
+    "treasury_10y",
+    "gpr"
+  ],
+  "target_type": "regression",
+  "metrics": {
+    "mae": 2877.1637025383957,
+    "rmse": 3554.418897591451,
+    "r2": 0.918062220294838
+  }
+}

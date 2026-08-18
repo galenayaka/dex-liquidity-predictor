@@ -1,0 +1,21 @@
+{
+  "ticker": "bnb",
+  "features": [
+    "open",
+    "high",
+    "low",
+    "close",
+    "volume",
+    "sp500_close",
+    "dxy",
+    "gold",
+    "treasury_10y",
+    "gpr"
+  ],
+  "target_type": "regression",
+  "metrics": {
+    "mae": 119.50082928654277,
+    "rmse": 122.29968104641688,
+    "r2": 0.23893335414747618
+  }
+}

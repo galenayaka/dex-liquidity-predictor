@@ -1,0 +1,21 @@
+{
+  "ticker": "eth",
+  "features": [
+    "open",
+    "high",
+    "low",
+    "close",
+    "volume",
+    "sp500_close",
+    "dxy",
+    "gold",
+    "treasury_10y",
+    "gpr"
+  ],
+  "target_type": "regression",
+  "metrics": {
+    "mae": 158.55124078431635,
+    "rmse": 176.21476762955075,
+    "r2": 0.9032482595330873
+  }
+}

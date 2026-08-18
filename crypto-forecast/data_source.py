@@ -8,6 +8,7 @@ import time
 import pandas as pd
 
 from config import (
+    BINANCE_BASE_URL,
     DATA_DIR,
     FRED_SERIES,
     GPR_URLS,
@@ -32,8 +33,44 @@ def _normalize_index(series: pd.Series) -> pd.Series:
     return series.sort_index()
 
 
-def fetch_crypto(symbol: str, period: str = "4y") -> pd.DataFrame:
-    """Daily OHLCV for a crypto symbol."""
+def fetch_crypto_binance(symbol: str, days: int = 1460) -> pd.DataFrame:
+    """Daily OHLCV from the Binance public klines endpoint (no key needed)."""
+    import requests
+
+    rows: list[list] = []
+    end_time: int | None = None
+    remaining = days
+    while remaining > 0:
+        limit = min(remaining, 1000)
+        params: dict[str, str | int] = {"symbol": symbol, "interval": "1d", "limit": limit}
+        if end_time is not None:
+            params["endTime"] = end_time
+        resp = requests.get(f"{BINANCE_BASE_URL}/klines", params=params, timeout=6)
+        resp.raise_for_status()
+        data = resp.json()
+        if not data:
+            break
+        rows = data + rows
+        end_time = int(data[0][0]) - 1  # open time of the earliest fetched candle
+        remaining -= len(data)
+        if len(data) < limit:
+            break
+
+    if not rows:
+        raise RuntimeError(f"Binance returned no data for {symbol}")
+
+    cols = ["open_time", "open", "high", "low", "close", "volume", "close_time"]
+    df = pd.DataFrame([r[:7] for r in rows], columns=cols)
+    df["open_time"] = pd.to_datetime(df["open_time"], unit="ms")
+    for col in ["open", "high", "low", "close", "volume"]:
+        df[col] = pd.to_numeric(df[col], errors="coerce")
+    df = df.set_index("open_time")[["open", "high", "low", "close", "volume"]]
+    df.index = df.index.tz_localize(None)
+    return df.sort_index()
+
+
+def fetch_crypto_yfinance(symbol: str, period: str = "4y") -> pd.DataFrame:
+    """Daily OHLCV for a crypto symbol via yfinance (fallback)."""
     import yfinance as yf
 
     raw = yf.download(
@@ -46,6 +83,19 @@ def fetch_crypto(symbol: str, period: str = "4y") -> pd.DataFrame:
     df.columns = ["open", "high", "low", "close", "volume"]
     df.index = pd.to_datetime(df.index, errors="coerce").tz_localize(None)
     return df.sort_index()
+
+
+def fetch_crypto(ticker: str, days: int = 1460) -> pd.DataFrame:
+    """Daily OHLCV for a ticker: Binance first, yfinance fallback."""
+    info = TICKERS[ticker]
+    try:
+        return fetch_crypto_binance(info["binance"], days=days)
+    except Exception as exc:  # noqa: BLE001
+        logger.warning(
+            "Binance fetch failed for %s (%s): %s — using yfinance",
+            ticker, info["binance"], exc,
+        )
+    return fetch_crypto_yfinance(info["yfinance"])
 
 
 def fetch_yfinance_series(symbol: str, period: str = "4y") -> pd.Series:
@@ -142,7 +192,8 @@ def _fetch_macro(name: str) -> pd.Series:
 
 def fetch_all(ticker: str = "btc", cache: bool = True) -> pd.DataFrame:
     """Build the aligned raw DataFrame (crypto OHLCV + macro + GPR)."""
-    symbol = TICKERS[ticker]
+    if ticker not in TICKERS:
+        raise KeyError(f"Unsupported ticker '{ticker}'")
     cache_path = DATA_DIR / f"{ticker}_raw.csv"
 
     if cache and cache_path.exists():
@@ -152,7 +203,7 @@ def fetch_all(ticker: str = "btc", cache: bool = True) -> pd.DataFrame:
             raw = pd.read_csv(cache_path, index_col=0, parse_dates=True)
             return raw
 
-    crypto = fetch_crypto(symbol)
+    crypto = fetch_crypto(ticker)
     series = {
         "sp500_close": _fetch_macro("sp500_close"),
         "dxy": _fetch_macro("dxy"),

@@ -1,22 +1,31 @@
-"""Model training, evaluation and persistence (XGBoost ensemble)."""
+"""Model training, evaluation and persistence (quantile XGBoost registry)."""
 from __future__ import annotations
 
 import json
 import logging
+from pathlib import Path
 from typing import Any
 
-import joblib
 import numpy as np
 import pandas as pd
-from sklearn.ensemble import HistGradientBoostingClassifier, HistGradientBoostingRegressor, VotingClassifier, VotingRegressor
-from sklearn.metrics import accuracy_score, classification_report, mean_absolute_error, mean_squared_error, r2_score
-from sklearn.pipeline import Pipeline
-from sklearn.preprocessing import StandardScaler
-from xgboost import XGBClassifier, XGBRegressor
+import xgboost as xgb
+from sklearn.metrics import mean_absolute_error, mean_squared_error, r2_score
 
-from config import MODEL_DIR, SEED, TARGET_TYPE, TRAIN_SPLIT
+from config import FEATURE_COLUMNS, MODEL_DIR, SEED, TRAIN_SPLIT
 
 logger = logging.getLogger(__name__)
+
+QUANTILES = [0.025, 0.5, 0.975]  # lower bound / median / upper bound
+
+
+def model_file(ticker: str) -> Path:
+    """Registry path for a ticker's XGBoost weights, e.g. models/BTC_xgb.json."""
+    return MODEL_DIR / f"{ticker.upper()}_xgb.json"
+
+
+def meta_file(ticker: str) -> Path:
+    """Registry path for a ticker's metadata (features, metrics, …)."""
+    return MODEL_DIR / f"{ticker.upper()}_meta.json"
 
 
 def chronological_split(df: pd.DataFrame, split: float = TRAIN_SPLIT) -> tuple[pd.DataFrame, pd.DataFrame]:
@@ -25,41 +34,23 @@ def chronological_split(df: pd.DataFrame, split: float = TRAIN_SPLIT) -> tuple[p
     return df.iloc[:cut].copy(), df.iloc[cut:].copy()
 
 
-def build_model(target_type: str = TARGET_TYPE, ensemble: bool = True):
-    """Build a scaled pipeline: XGBoost alone, or an XGBoost + HistGBM ensemble."""
-    if target_type == "classification":
-        xgb = XGBClassifier(
-            n_estimators=300, max_depth=5, learning_rate=0.05,
-            subsample=0.9, colsample_bytree=0.9, random_state=SEED,
-        )
-        hgb = HistGradientBoostingClassifier(random_state=SEED)
-    else:
-        xgb = XGBRegressor(
-            n_estimators=300, max_depth=5, learning_rate=0.05,
-            subsample=0.9, colsample_bytree=0.9, random_state=SEED,
-        )
-        hgb = HistGradientBoostingRegressor(random_state=SEED)
-
-    xgb_pipe = Pipeline([("scaler", StandardScaler()), ("xgb", xgb)])
-    hgb_pipe = Pipeline([("scaler", StandardScaler()), ("hgb", hgb)])
-
-    if ensemble:
-        if target_type == "classification":
-            return VotingClassifier([("xgb", xgb_pipe), ("hgb", hgb_pipe)], voting="soft")
-        return VotingRegressor([("xgb", xgb_pipe), ("hgb", hgb_pipe)])
-
-    return xgb_pipe
+def build_model():
+    """Quantile XGBoost: predicts a median plus lower/upper 95% bounds."""
+    return xgb.XGBRegressor(
+        objective="reg:quantileerror",
+        quantile_alpha=QUANTILES,
+        n_estimators=300,
+        max_depth=5,
+        learning_rate=0.05,
+        subsample=0.9,
+        colsample_bytree=0.9,
+        random_state=SEED,
+        tree_method="hist",
+    )
 
 
-def evaluate(y_true: np.ndarray, y_pred: np.ndarray, target_type: str) -> dict[str, Any]:
-    """Compute regression or classification metrics."""
-    if target_type == "classification":
-        return {
-            "accuracy": float(accuracy_score(y_true, y_pred)),
-            "classification_report": classification_report(
-                y_true, y_pred, output_dict=True, zero_division=0
-            ),
-        }
+def evaluate(y_true: np.ndarray, y_pred: np.ndarray) -> dict[str, Any]:
+    """Regression metrics for the median prediction."""
     return {
         "mae": float(mean_absolute_error(y_true, y_pred)),
         "rmse": float(np.sqrt(mean_squared_error(y_true, y_pred))),
@@ -70,122 +61,101 @@ def evaluate(y_true: np.ndarray, y_pred: np.ndarray, target_type: str) -> dict[s
 def train(
     df: pd.DataFrame,
     features: list[str],
-    target_type: str = TARGET_TYPE,
-    ensemble: bool = True,
 ) -> tuple[Any, dict[str, Any], pd.DataFrame]:
     """Train on the chronological train split and evaluate on the test split."""
     train_df, test_df = chronological_split(df)
     X_train, y_train = train_df[features], train_df["target"]
     X_test, y_test = test_df[features], test_df["target"]
 
-    model = build_model(target_type, ensemble=ensemble)
+    model = build_model()
     model.fit(X_train, y_train)
-    y_pred = model.predict(X_test)
+    preds = model.predict(X_test)  # shape (n, 3): [q025, median, q975]
+    median = preds[:, 1]
 
-    metrics = evaluate(y_test.to_numpy(), y_pred, target_type)
+    metrics = evaluate(y_test.to_numpy(), median)
 
     results = test_df[["close", "target"]].copy()
-    results["prediction"] = y_pred
+    results["prediction"] = median
     return model, metrics, results
 
 
 def save_model(
+    ticker: str,
     model: Any,
     features: list[str],
-    target_type: str,
-    ticker: str,
     metrics: dict[str, Any] | None = None,
 ) -> None:
-    """Persist the fitted model + metadata needed by the serving API."""
+    """Persist the XGBoost model (.json) + metadata to the registry."""
     MODEL_DIR.mkdir(parents=True, exist_ok=True)
-    joblib.dump(model, MODEL_DIR / f"{ticker}_{target_type}_model.joblib")
+    model.save_model(str(model_file(ticker)))
     meta = {
-        "features": features,
-        "target_type": target_type,
         "ticker": ticker,
+        "features": features,
+        "target_type": "regression",
         "metrics": metrics or {},
     }
-    (MODEL_DIR / f"{ticker}_{target_type}_meta.json").write_text(
-        json.dumps(meta, indent=2)
-    )
-    logger.info("Saved model to %s", MODEL_DIR)
-
-
-def _member_predictions(model: Any, row: pd.DataFrame) -> list[float]:
-    """Collect each base estimator's prediction (works for sklearn ensembles)."""
-    if hasattr(model, "estimators_"):
-        preds: list[float] = []
-        for item in model.estimators_:
-            est = item[1] if isinstance(item, tuple) else item
-            preds.append(float(est.predict(row)[0]))
-        return preds
-    return [float(model.predict(row)[0])]
+    meta_file(ticker).write_text(json.dumps(meta, indent=2))
+    logger.info("Saved %s", model_file(ticker))
 
 
 def predict_with_uncertainty(
-    model: Any, row: pd.DataFrame, meta: dict[str, Any]
+    booster: Any, row: pd.DataFrame, meta: dict[str, Any]
 ) -> dict[str, Any]:
-    """Return the forecast plus confidence / interval / model-quality info.
+    """Median point forecast + 95% interval (ŷ ± 1.96·RMSE) + confidence."""
+    dmat = xgb.DMatrix(row[meta["features"]])
+    q = booster.predict(dmat)  # shape (1, 3): [q025, median, q975]
+    median = float(q[0][1])
 
-    Regression: confidence reflects how closely the ensemble members agree,
-    scaled by the held-out test RMSE; the interval is ŷ ± 1.96·RMSE.
-    Classification: confidence is the predicted class probability.
-    """
-    target_type = meta["target_type"]
     metrics: dict[str, Any] = meta.get("metrics", {})
-
-    if target_type == "classification":
-        direction = int(model.predict(row)[0])
-        proba = float(model.predict_proba(row)[0][1])
-        conf = proba if direction == 1 else 1.0 - proba
-        acc = metrics.get("accuracy")
-        return {
-            "ticker": meta.get("ticker"),
-            "target_type": target_type,
-            "predicted_direction": direction,
-            "probability_up": proba,
-            "confidence": round(conf * 100.0, 1),
-            "model_accuracy": round(acc, 4) if acc is not None else None,
-        }
-
-    price = float(model.predict(row)[0])
-    member_preds = _member_predictions(model, row)
-    spread = (
-        float(max(member_preds) - min(member_preds))
-        if len(member_preds) > 1
-        else 0.0
-    )
-
     rmse = metrics.get("rmse")
+
     if rmse and rmse > 0:
-        interval_low = price - 1.96 * rmse
-        interval_high = price + 1.96 * rmse
-        # Perfect agreement -> 100; disagreement of 2·RMSE -> 0.
-        confidence = max(0.0, 100.0 * (1.0 - spread / (2.0 * rmse)))
+        # Standard normal 95% band around the median point estimate.
+        interval_low = median - 1.96 * rmse
+        interval_high = median + 1.96 * rmse
+        # Confidence: how tight that band is relative to the price level.
+        confidence = (
+            max(0.0, min(100.0, 100.0 * (1.0 - (1.96 * rmse) / median)))
+            if median > 0
+            else None
+        )
     else:
-        interval_low = interval_high = None
-        confidence = None
+        # Fallback: use the quantile bounds, clamped to stay monotonic.
+        low = float(q[0][0])
+        high = float(q[0][2])
+        interval_low = min(low, median)
+        interval_high = max(median, high)
+        width = interval_high - interval_low
+        confidence = (
+            max(0.0, min(100.0, 100.0 * (1.0 - (width / 2.0) / median)))
+            if median > 0
+            else None
+        )
 
     return {
         "ticker": meta.get("ticker"),
-        "target_type": target_type,
-        "predicted_price": price,
+        "target_type": "regression",
+        "predicted_price": median,
         "confidence": round(confidence, 1) if confidence is not None else None,
-        "interval_low": round(interval_low, 2) if interval_low is not None else None,
-        "interval_high": round(interval_high, 2) if interval_high is not None else None,
+        "interval_low": round(interval_low, 2),
+        "interval_high": round(interval_high, 2),
         "model_rmse": round(rmse, 2) if rmse is not None else None,
         "model_mae": round(metrics.get("mae"), 2) if metrics.get("mae") is not None else None,
         "model_r2": round(metrics.get("r2"), 4) if metrics.get("r2") is not None else None,
-        "ensemble_size": len(member_preds),
+        "ensemble_size": 1,
     }
 
 
-def load_model(ticker: str, target_type: str = TARGET_TYPE) -> tuple[Any, dict[str, Any]]:
-    """Load a trained model and its metadata."""
-    model_path = MODEL_DIR / f"{ticker}_{target_type}_model.joblib"
-    meta_path = MODEL_DIR / f"{ticker}_{target_type}_meta.json"
-    if not model_path.exists():
+def load_model(ticker: str) -> tuple[Any, dict[str, Any]]:
+    """Load a trained XGBoost booster + metadata from the registry."""
+    path = model_file(ticker)
+    if not path.exists():
         raise FileNotFoundError(
-            f"No trained model at {model_path}. Run `python train.py --ticker {ticker}` first."
+            f"No model for '{ticker}' at {path}. Run `python train.py --ticker {ticker}` first."
         )
-    return joblib.load(model_path), json.loads(meta_path.read_text())
+    booster = xgb.Booster()
+    booster.load_model(str(path))
+    meta: dict[str, Any] = {"ticker": ticker, "features": FEATURE_COLUMNS}
+    if meta_file(ticker).exists():
+        meta = json.loads(meta_file(ticker).read_text())
+    return booster, meta

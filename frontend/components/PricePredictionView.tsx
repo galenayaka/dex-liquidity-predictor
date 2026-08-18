@@ -6,7 +6,7 @@ import Explain from "@/components/Explain";
 const FORECAST_URL =
   process.env.NEXT_PUBLIC_FORECAST_URL ?? "http://localhost:8100";
 
-type Ticker = "btc" | "eth";
+type Ticker = "btc" | "eth" | "sol" | "bnb" | "xrp";
 
 type FieldKey =
   | "open"
@@ -42,6 +42,18 @@ const TICKER_DEFAULTS: Record<Ticker, Record<FieldKey, number>> = {
     open: 3450, high: 3520, low: 3400, close: 3480, volume: 1.8e10,
     sp500_close: 5300, dxy: 104.2, gold: 2350, treasury_10y: 4.25, gpr: 95,
   },
+  sol: {
+    open: 76, high: 78, low: 75, close: 76, volume: 2e9,
+    sp500_close: 5300, dxy: 104.2, gold: 2350, treasury_10y: 4.25, gpr: 95,
+  },
+  bnb: {
+    open: 603, high: 610, low: 600, close: 603, volume: 1.5e9,
+    sp500_close: 5300, dxy: 104.2, gold: 2350, treasury_10y: 4.25, gpr: 95,
+  },
+  xrp: {
+    open: 1.0, high: 1.02, low: 0.99, close: 1.0, volume: 1.2e9,
+    sp500_close: 5300, dxy: 104.2, gold: 2350, treasury_10y: 4.25, gpr: 95,
+  },
 };
 
 interface ForecastResult {
@@ -60,7 +72,61 @@ interface ForecastResult {
   ensemble_size?: number | null;
 }
 
-export default function PricePredictionView() {
+type SnapshotKey =
+  | "btc"
+  | "eth"
+  | "sol"
+  | "bnb"
+  | "xrp"
+  | "sp500_close"
+  | "dxy"
+  | "gold"
+  | "treasury_10y"
+  | "gpr";
+
+interface CoinQuote {
+  price?: number | null;
+  change_24h?: number | null;
+}
+
+interface MarketSnapshot {
+  as_of?: string | null;
+  btc?: CoinQuote | null;
+  eth?: CoinQuote | null;
+  sol?: CoinQuote | null;
+  bnb?: CoinQuote | null;
+  xrp?: CoinQuote | null;
+  sp500_close?: number | null;
+  dxy?: number | null;
+  gold?: number | null;
+  treasury_10y?: number | null;
+  gpr?: number | null;
+}
+
+const SNAPSHOT_TILES: {
+  key: SnapshotKey;
+  label: string;
+  coin?: boolean;
+  get: (s: MarketSnapshot) => number | null;
+  fmt: (v: number) => string;
+}[] = [
+  { key: "btc", label: "BTC", coin: true, get: (s) => s.btc?.price ?? null, fmt: (v) => `$${v.toLocaleString(undefined, { maximumFractionDigits: 0 })}` },
+  { key: "eth", label: "ETH", coin: true, get: (s) => s.eth?.price ?? null, fmt: (v) => `$${v.toLocaleString(undefined, { maximumFractionDigits: 0 })}` },
+  { key: "sol", label: "SOL", coin: true, get: (s) => s.sol?.price ?? null, fmt: (v) => `$${v.toLocaleString(undefined, { maximumFractionDigits: 2 })}` },
+  { key: "bnb", label: "BNB", coin: true, get: (s) => s.bnb?.price ?? null, fmt: (v) => `$${v.toLocaleString(undefined, { maximumFractionDigits: 2 })}` },
+  { key: "xrp", label: "XRP", coin: true, get: (s) => s.xrp?.price ?? null, fmt: (v) => `$${v.toLocaleString(undefined, { maximumFractionDigits: 4 })}` },
+  { key: "sp500_close", label: "S&P 500", get: (s) => s.sp500_close ?? null, fmt: (v) => v.toLocaleString(undefined, { maximumFractionDigits: 2 }) },
+  { key: "gold", label: "Gold", get: (s) => s.gold ?? null, fmt: (v) => `$${v.toLocaleString(undefined, { maximumFractionDigits: 0 })}` },
+  { key: "dxy", label: "DXY", get: (s) => s.dxy ?? null, fmt: (v) => v.toLocaleString(undefined, { maximumFractionDigits: 2 }) },
+  { key: "treasury_10y", label: "10Y Yield", get: (s) => s.treasury_10y ?? null, fmt: (v) => `${v.toFixed(2)}%` },
+  { key: "gpr", label: "GPR Index", get: (s) => s.gpr ?? null, fmt: (v) => v.toLocaleString(undefined, { maximumFractionDigits: 1 }) },
+];
+
+interface PricePredictionViewProps {
+  command?: { ticker: string; ts: number } | null;
+}
+
+export default function PricePredictionView({ command }: PricePredictionViewProps) {
   const [ticker, setTicker] = useState<Ticker>("btc");
   const [values, setValues] = useState<Record<FieldKey, number>>(
     TICKER_DEFAULTS.btc,
@@ -70,6 +136,28 @@ export default function PricePredictionView() {
   const [error, setError] = useState<string | null>(null);
   const [asOf, setAsOf] = useState<string | null>(null);
   const [fetchingLatest, setFetchingLatest] = useState(false);
+  const [snapshot, setSnapshot] = useState<MarketSnapshot | null>(null);
+  const [fetchingSnapshot, setFetchingSnapshot] = useState(false);
+
+  const loadSnapshot = async () => {
+    setFetchingSnapshot(true);
+    try {
+      const controller = new AbortController();
+      const timer = setTimeout(() => controller.abort(), 8000);
+      const res = await fetch(`${FORECAST_URL}/snapshot`, {
+        signal: controller.signal,
+      });
+      clearTimeout(timer);
+      if (!res.ok) return;
+      const data: unknown = await res.json().catch(() => null);
+      if (!data || typeof data !== "object") return;
+      setSnapshot(data as MarketSnapshot);
+    } catch {
+      // leave previous snapshot as-is
+    } finally {
+      setFetchingSnapshot(false);
+    }
+  };
 
   const loadLatest = async (key: Ticker) => {
     setFetchingLatest(true);
@@ -104,10 +192,56 @@ export default function PricePredictionView() {
     }
   };
 
+  const predictFromLive = async (key: Ticker) => {
+    setLoading(true);
+    setError(null);
+    setResult(null);
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 8000);
+    try {
+      const res = await fetch(`${FORECAST_URL}/predict/${key}`, {
+        signal: controller.signal,
+      });
+      const data: unknown = await res.json().catch(() => null);
+      if (!res.ok) {
+        const detail =
+          data && typeof data === "object" && "detail" in data
+            ? String((data as { detail: unknown }).detail)
+            : `HTTP ${res.status}`;
+        setError(detail);
+        return;
+      }
+      setResult(data as ForecastResult);
+    } catch {
+      setError(
+        "Forecast service unreachable. Start crypto-forecast (uvicorn main:app --port 8100).",
+      );
+    } finally {
+      clearTimeout(timer);
+      setLoading(false);
+    }
+  };
+
   useEffect(() => {
     void loadLatest("btc");
+    void loadSnapshot();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  useEffect(() => {
+    if (!command) return;
+    const key = command.ticker.toLowerCase();
+    if (!(key in TICKER_DEFAULTS)) return;
+    const t = key as Ticker;
+    setTicker(t);
+    setValues(TICKER_DEFAULTS[t]);
+    setResult(null);
+    setError(null);
+    setAsOf(null);
+    void loadLatest(t);
+    void predictFromLive(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [command?.ts]);
 
   const selectTicker = (key: Ticker) => {
     setTicker(key);
@@ -163,9 +297,42 @@ export default function PricePredictionView() {
 
   return (
     <div className="space-y-3">
+      <section className="panel max-w-3xl">
+        <div className="panel-head">
+          <h3 className="panel-title">Current market</h3>
+          <span className="text-[10px] uppercase tracking-wider text-noir-dim">
+            {fetchingSnapshot
+              ? "loading…"
+              : snapshot?.as_of
+                ? `as of ${snapshot.as_of}`
+                : "unavailable"}
+          </span>
+        </div>
+        <div className="grid grid-cols-2 gap-px bg-noir-line sm:grid-cols-4 lg:grid-cols-5">
+          {SNAPSHOT_TILES.map((tile) => {
+            const value = snapshot ? tile.get(snapshot) : null;
+            return (
+              <div key={tile.key} className="bg-noir-panel2 px-3 py-2">
+                <div className="text-[10px] uppercase tracking-wider text-noir-dim">
+                  {tile.label}
+                </div>
+                <div
+                  className={`text-sm font-bold ${
+                    tile.coin ? "text-noir-amber text-glow" : "text-noir-text"
+                  }`}
+                >
+                  {value != null ? tile.fmt(value) : "—"}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </section>
+
       <Explain title="About price prediction" open>
         This calls a machine-learning service that forecasts the next-day price
-        of <b>BTC</b> or <b>ETH</b> from today's crypto prices plus the stock
+        of <b>BTC</b>, <b>ETH</b>, <b>SOL</b>, <b>BNB</b> or <b>XRP</b> from
+        today's crypto prices plus the stock
         market (S&amp;P 500), the dollar (DXY), gold, bond yields and geopolitical
         risk. Fill in the values (or keep the example defaults) and press{" "}
         <b>Predict</b>. It is an estimate, not financial advice.
@@ -187,29 +354,31 @@ export default function PricePredictionView() {
             training: <code>z = (x − μ) / σ</code>.
           </li>
           <li>
-            <b>Gradient boosting.</b> Two tree ensembles minimize squared error{" "}
-            <code>Σ (close_(t+1) − ŷ_t)²</code>:
-            <ul className="ml-4 list-disc">
-              <li><b>XGBoost</b> — 300 boosted decision trees (depth 5).</li>
-              <li><b>HistGradientBoosting</b> — histogram-based boosted trees.</li>
-            </ul>
+            <b>Gradient boosting.</b> XGBoost builds 300 decision trees (depth 5)
+            that repeatedly fix their predecessors&apos; mistakes to minimize
+            squared error <code>Σ (close_(t+1) − ŷ_t)²</code>.
           </li>
           <li>
-            <b>Ensemble.</b> The forecast averages the two models:{" "}
-            <code>ŷ = (xgb(x) + hgb(x)) / 2</code>.
+            <b>Quantiles.</b> The model is trained for three targets — the 2.5th,
+            50th (median) and 97.5th percentiles — so it learns a full range of
+            likely outcomes, not just one number.
+          </li>
+          <li>
+            <b>Point forecast.</b> The headline price is the median:{" "}
+            <code>ŷ = median(x)</code>.
           </li>
           <li>
             <b>Train/test split.</b> Chronological 80/20: the model trains on the
             past and is scored only on strictly future days (no look-ahead bias).
           </li>
           <li>
-            <b>Confidence.</b> How closely the two models agree, scaled by typical
-            error: <code>confidence = max(0, 100 × (1 − spread / (2·RMSE)))</code>.
-            Perfect agreement → 100%.
-          </li>
-          <li>
             <b>95% interval.</b> <code>ŷ ± 1.96 × RMSE</code>, where RMSE is the
             model&apos;s error on the held-out test set.
+          </li>
+          <li>
+            <b>Confidence.</b> How tight that interval is relative to the price:{" "}
+            <code>confidence = 100 × (1 − (1.96·RMSE) / ŷ)</code>. A tighter band
+            (relative to price) → higher confidence.
           </li>
         </ol>
         <p className="mt-2">
@@ -222,7 +391,7 @@ export default function PricePredictionView() {
         <div className="panel-head">
           <h3 className="panel-title">Price Prediction</h3>
           <div className="flex gap-1">
-            {(["btc", "eth"] as const).map((t) => (
+            {(["btc", "eth", "sol", "bnb", "xrp"] as const).map((t) => (
               <button
                 key={t}
                 type="button"
@@ -267,7 +436,10 @@ export default function PricePredictionView() {
             </span>
             <button
               type="button"
-              onClick={() => void loadLatest(ticker)}
+              onClick={() => {
+                void loadLatest(ticker);
+                void loadSnapshot();
+              }}
               disabled={fetchingLatest}
               className="border border-noir-line px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-noir-muted hover:text-noir-text disabled:opacity-50"
             >
