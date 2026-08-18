@@ -9,6 +9,7 @@ import PoolsView from "@/components/PoolsView";
 import PredictionPanel from "@/components/PredictionPanel";
 import PredictionsView from "@/components/PredictionsView";
 import PricePanel from "@/components/PricePanel";
+import PricePredictionView from "@/components/PricePredictionView";
 import SettingsView from "@/components/SettingsView";
 import Sidebar, { type View } from "@/components/Sidebar";
 import { useWebSocket } from "@/hooks/useWebSocket";
@@ -31,6 +32,10 @@ const VIEW_TITLES: Record<View, { title: string; subtitle: string }> = {
   predictions: {
     title: "Predictions",
     subtitle: "Live AI predictions for recent on-chain events",
+  },
+  price: {
+    title: "Price Prediction",
+    subtitle: "Next-day BTC/ETH price forecast from the ML service",
   },
   alerts: {
     title: "Alerts",
@@ -175,6 +180,7 @@ export default function Dashboard() {
 
           {view === "pools" && <PoolsView pools={pools} />}
           {view === "predictions" && <PredictionsView events={events} />}
+          {view === "price" && <PricePredictionView />}
           {view === "alerts" && <AlertsView alerts={alerts} events={events} />}
           {view === "settings" && <SettingsView status={status} />}
         </div>

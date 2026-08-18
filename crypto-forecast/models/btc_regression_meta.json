@@ -1,0 +1,16 @@
+{
+  "features": [
+    "open",
+    "high",
+    "low",
+    "close",
+    "volume",
+    "sp500_close",
+    "dxy",
+    "gold",
+    "treasury_10y",
+    "gpr"
+  ],
+  "target_type": "regression",
+  "ticker": "btc"
+}
