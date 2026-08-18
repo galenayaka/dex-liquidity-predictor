@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import EmptyPanel from "@/components/EmptyPanel";
+import Explain from "@/components/Explain";
 import LiquidityChart from "@/components/LiquidityChart";
 import { useHistoricalMetrics } from "@/hooks/useHistoricalMetrics";
 import { formatPrice, formatUsd, shortenAddress } from "@/lib/format";
@@ -60,6 +61,12 @@ export default function PoolsView({ pools }: { pools: PoolState[] }) {
             </tbody>
           </table>
         </div>
+
+        <Explain title="Reading the pool table">
+          TVL is the total money locked in a pool — bigger is healthier. Price is
+          the exchange rate between the two tokens, and Fee is what each swap
+          costs. Liquidity is the raw pool depth used in the chart below.
+        </Explain>
       </section>
 
       <section className="panel overflow-hidden">
@@ -100,6 +107,12 @@ export default function PoolsView({ pools }: { pools: PoolState[] }) {
             bordered={false}
           />
         )}
+
+        <Explain title="Reading the history chart">
+          This shows the pool's dollar reserves over the last 24 hours. A falling
+          line means providers are withdrawing — an early sign a drain could be
+          coming.
+        </Explain>
       </section>
     </div>
   );

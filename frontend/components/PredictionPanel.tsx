@@ -1,6 +1,7 @@
 "use client";
 
 import type { ReactNode } from "react";
+import Explain from "@/components/Explain";
 import RiskBadge from "@/components/RiskBadge";
 import { formatPct, shortenAddress } from "@/lib/format";
 import type { AlertMessage, EventMessage } from "@/lib/types";
@@ -83,6 +84,13 @@ export default function PredictionPanel({
           </div>
         )}
       </div>
+
+      <Explain title="What this means">
+        "Drain" is the predicted % of liquidity likely to leave the pool soon.
+        "Price impact" is how much a typical trade would move the price. Higher
+        numbers mean more risk — the risk level (Low / Medium / High) summarises
+        both.
+      </Explain>
     </section>
   );
 }

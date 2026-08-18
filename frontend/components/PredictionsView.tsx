@@ -1,6 +1,7 @@
 "use client";
 
 import EmptyPanel from "@/components/EmptyPanel";
+import Explain from "@/components/Explain";
 import RiskBadge from "@/components/RiskBadge";
 import { formatPct, shortenAddress } from "@/lib/format";
 import type { EventMessage } from "@/lib/types";
@@ -67,6 +68,12 @@ export default function PredictionsView({
           </tbody>
         </table>
       </div>
+
+      <Explain title="Reading the prediction feed">
+        Each row is a live on-chain event. <b>Swap</b> means a trade happened;
+        <b>Burn</b> means someone withdrew liquidity — the main warning sign. The
+        AI then estimates the drain % and price impact, and tags a risk level.
+      </Explain>
     </section>
   );
 }

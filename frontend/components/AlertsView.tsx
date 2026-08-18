@@ -1,6 +1,7 @@
 "use client";
 
 import EmptyPanel from "@/components/EmptyPanel";
+import Explain from "@/components/Explain";
 import RiskBadge from "@/components/RiskBadge";
 import { formatPct } from "@/lib/format";
 import type { AlertMessage, EventMessage } from "@/lib/types";
@@ -32,6 +33,12 @@ export default function AlertsView({ alerts, events }: AlertsViewProps) {
         <h3 className="panel-title">Alert Feed</h3>
         <p className="panel-sub">{total} WARNINGS</p>
       </div>
+
+      <Explain title="Why these alerts matter">
+        A warning means the AI is confident a pool is about to lose liquidity. If
+        you trade or provide liquidity here, check before transacting — thin
+        liquidity means you'll pay more per trade and prices can swing sharply.
+      </Explain>
 
       <div>
         {[...alerts].reverse().map((alert, index) => (

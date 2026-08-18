@@ -1,5 +1,6 @@
 "use client";
 
+import Explain from "@/components/Explain";
 import { formatPrice, formatUsd, shortenAddress } from "@/lib/format";
 import type { PoolState } from "@/lib/types";
 
@@ -54,6 +55,13 @@ export default function PricePanel({ pools }: { pools: PoolState[] }) {
           </tbody>
         </table>
       </div>
+
+      <Explain title="Reading this table">
+        TVL is the total money locked in the pool — bigger usually means
+        healthier. Price is the current exchange rate between the two tokens, and
+        Fee is what each swap costs. Tick is a technical price-range marker; you
+        can safely ignore it.
+      </Explain>
     </section>
   );
 }

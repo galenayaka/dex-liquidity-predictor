@@ -202,6 +202,22 @@
   .blink {
     animation: noir-blink 1.1s step-end infinite;
   }
+
+  details.help > summary {
+    list-style: none;
+    cursor: pointer;
+  }
+  details.help > summary::-webkit-details-marker {
+    display: none;
+  }
+  details.help > summary .help-arrow {
+    display: inline-block;
+    transition: transform 0.1s ease;
+    color: var(--noir-accent2);
+  }
+  details.help[open] > summary .help-arrow {
+    transform: rotate(90deg);
+  }
 }
 
 @keyframes noir-blink {

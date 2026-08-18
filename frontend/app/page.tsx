@@ -3,6 +3,7 @@
 import { useMemo, useState } from "react";
 import AlertBanner from "@/components/AlertBanner";
 import AlertsView from "@/components/AlertsView";
+import Explain from "@/components/Explain";
 import LiquidityChart from "@/components/LiquidityChart";
 import PoolsView from "@/components/PoolsView";
 import PredictionPanel from "@/components/PredictionPanel";
@@ -128,6 +129,32 @@ export default function Dashboard() {
 
           {view === "dashboard" && (
             <>
+              <Explain title="How to read this dashboard" open>
+                <p>
+                  This terminal watches Uniswap v3 liquidity pools on Ethereum in
+                  real time. An AI model reads every trade and withdrawal, then
+                  predicts when a pool might lose liquidity — a{" "}
+                  <b>liquidity drain</b> — and how that would move prices. It is
+                  an early-warning system for traders and liquidity providers.
+                </p>
+                <p className="mt-1">
+                  <b>Liquidity pool</b> — a pot of two tokens (e.g. USDC/WETH)
+                  that traders swap against.
+                  <br />
+                  <b>Liquidity drain</b> — providers withdrawing tokens, thinning
+                  the pool.
+                  <br />
+                  <b>Price impact</b> — how much a trade moves the price (high =
+                  slippage).
+                  <br />
+                  <b>TVL</b> — total dollar value locked in a pool (bigger =
+                  healthier).
+                  <br />
+                  <b>Risk level</b> — how likely the AI thinks a drain is (Low /
+                  Medium / High).
+                </p>
+              </Explain>
+
               <div className="grid grid-cols-1 gap-3 xl:grid-cols-3">
                 <div className="xl:col-span-2">
                   <PricePanel pools={pools} />
@@ -136,6 +163,13 @@ export default function Dashboard() {
               </div>
 
               <LiquidityChart data={liquiditySeries} />
+
+              <Explain title="Why liquidity movements matter">
+                When providers withdraw from a pool, every trade moves the price
+                more — trading gets more expensive and the token can swing
+                sharply. A falling liquidity line (or a Burn event) is the early
+                warning sign.
+              </Explain>
             </>
           )}
 
