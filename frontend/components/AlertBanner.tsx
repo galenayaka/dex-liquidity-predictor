@@ -9,10 +9,8 @@ interface AlertBannerProps {
 }
 
 /**
- * Red warning banner shown when the real-time stream reports a high-risk
- * liquidity event:
- *   - an `event` frame whose `prediction.risk_level` is "High", or
- *   - an `alert` frame at HIGH / CRITICAL level.
+ * Severe high-contrast banner shown when the real-time stream reports a
+ * high-risk liquidity event (`risk_level === "High"`) or a HIGH/CRITICAL alert.
  */
 export default function AlertBanner({ event, alert }: AlertBannerProps) {
   const prediction = event?.prediction;
@@ -36,16 +34,16 @@ export default function AlertBanner({ event, alert }: AlertBannerProps) {
   return (
     <div
       role="alert"
-      className="flex items-start gap-3 rounded-lg border border-red-500/40 bg-red-500/10 px-4 py-3"
+      className="flex items-center gap-3 border border-noir-blood bg-noir-panel2 px-3 py-2"
     >
-      <span className="text-lg leading-none" aria-hidden="true">
-        ⚠️
+      <span className="text-noir-blood blink" aria-hidden="true">
+        ⚠
       </span>
-      <div className="space-y-1">
-        <p className="text-sm font-semibold text-red-300">
+      <div className="min-w-0">
+        <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-noir-blood">
           High-risk liquidity alert
         </p>
-        <p className="text-sm text-red-200/90">{message}</p>
+        <p className="truncate text-xs text-noir-text">{message}</p>
       </div>
     </div>
   );

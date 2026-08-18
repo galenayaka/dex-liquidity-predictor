@@ -102,18 +102,22 @@ export default function Dashboard() {
   const heading = VIEW_TITLES[view];
 
   return (
-    <div className="flex h-screen w-full bg-slate-950 text-slate-100">
+    <div className="flex h-screen w-full bg-black text-noir-text">
       <Sidebar status={status} active={view} onNavigate={setView} />
 
       <main className="flex-1 overflow-y-auto">
-        <div className="mx-auto max-w-6xl space-y-6 p-6">
-          <header className="flex flex-wrap items-center justify-between gap-4">
+        <div className="space-y-3 p-3">
+          <header className="flex flex-wrap items-end justify-between gap-2 border-b border-noir-line pb-2">
             <div>
-              <h2 className="text-2xl font-semibold">{heading.title}</h2>
-              <p className="text-sm text-slate-400">{heading.subtitle}</p>
+              <h2 className="text-lg font-bold uppercase tracking-[0.18em] text-noir-amber text-glow">
+                {heading.title}
+              </h2>
+              <p className="text-[10px] uppercase tracking-[0.16em] text-noir-dim">
+                {heading.subtitle}
+              </p>
             </div>
-            <span className="rounded-full border border-slate-800 bg-slate-900 px-3 py-1 text-xs text-slate-300">
-              Last update:{" "}
+            <span className="border border-noir-line bg-noir-panel px-2 py-0.5 text-[10px] uppercase tracking-wider text-noir-muted">
+              Last update{" "}
               {lastUpdate != null
                 ? new Date(lastUpdate * 1000).toLocaleTimeString()
                 : "—"}
@@ -124,7 +128,7 @@ export default function Dashboard() {
 
           {view === "dashboard" && (
             <>
-              <div className="grid grid-cols-1 gap-6 xl:grid-cols-3">
+              <div className="grid grid-cols-1 gap-3 xl:grid-cols-3">
                 <div className="xl:col-span-2">
                   <PricePanel pools={pools} />
                 </div>

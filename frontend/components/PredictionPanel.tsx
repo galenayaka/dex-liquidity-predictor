@@ -12,8 +12,10 @@ interface PredictionPanelProps {
 
 function Row({ label, children }: { label: string; children: ReactNode }) {
   return (
-    <div className="flex items-center justify-between gap-4">
-      <span className="text-sm text-slate-400">{label}</span>
+    <div className="flex items-center justify-between gap-3 border-b border-noir-line py-1 last:border-0">
+      <span className="text-[10px] uppercase tracking-[0.14em] text-noir-dim">
+        {label}
+      </span>
       {children}
     </div>
   );
@@ -26,70 +28,61 @@ export default function PredictionPanel({
   const prediction = event?.prediction;
 
   return (
-    <section className="space-y-6 rounded-xl border border-slate-800 bg-slate-900 p-6">
-      <div>
-        <h3 className="font-semibold text-slate-100">Liquidity Prediction</h3>
-        <p className="text-xs text-slate-400">
-          Latest on-chain event inference
-        </p>
+    <section className="panel">
+      <div className="panel-head">
+        <h3 className="panel-title">Liquidity Prediction</h3>
+        <p className="panel-sub">Latest event inference</p>
       </div>
 
-      {prediction ? (
-        <div className="space-y-3">
-          <Row label="Event">
-            <span className="text-sm font-medium text-slate-100">
-              {event?.event} · {event?.pair}
-            </span>
-          </Row>
-          <Row label="Risk level">
-            <RiskBadge level={prediction.risk_level} />
-          </Row>
-          <Row label="Drain prediction">
-            <span className="text-sm font-semibold text-red-300">
-              {formatPct(prediction.predicted_drain_percentage)}
-            </span>
-          </Row>
-          <Row label="Price impact">
-            <span className="text-sm font-semibold text-slate-100">
-              {formatPct(prediction.predicted_price_impact)}
-            </span>
-          </Row>
-          {event?.transaction_hash && (
-            <Row label="Transaction">
-              <span className="font-mono text-xs text-slate-500">
-                {shortenAddress(event.transaction_hash)}
+      <div className="px-3 py-2">
+        {prediction ? (
+          <div>
+            <Row label="Event">
+              <span className="text-xs font-bold text-noir-amber">
+                {event?.event} · {event?.pair}
               </span>
             </Row>
-          )}
-        </div>
-      ) : (
-        <p className="text-sm text-slate-500">
-          No prediction yet — waiting for Swap/Burn events…
-        </p>
-      )}
-
-      {alert && (
-        <div className="space-y-2 border-t border-slate-800 pt-4">
-          <RiskBadge level={alert.level} />
-          <p className="text-sm text-slate-300">{alert.message}</p>
-          <div className="grid grid-cols-2 gap-2 text-xs text-slate-400">
-            <div>
-              Drain probability:{" "}
-              <span className="text-slate-200">
-                {alert.drain_probability != null
-                  ? `${(alert.drain_probability * 100).toFixed(1)}%`
-                  : "—"}
+            <Row label="Risk level">
+              <RiskBadge level={prediction.risk_level} />
+            </Row>
+            <Row label="Drain prediction">
+              <span className="text-xs font-bold text-noir-orange">
+                {formatPct(prediction.predicted_drain_percentage)}
               </span>
-            </div>
-            <div>
-              Impact:{" "}
-              <span className="text-slate-200">
-                {formatPct(alert.price_impact_pct)}
+            </Row>
+            <Row label="Price impact">
+              <span className="text-xs font-bold text-noir-text">
+                {formatPct(prediction.predicted_price_impact)}
               </span>
-            </div>
+            </Row>
+            {event?.transaction_hash && (
+              <Row label="Transaction">
+                <span className="text-[10px] text-noir-dim">
+                  {shortenAddress(event.transaction_hash)}
+                </span>
+              </Row>
+            )}
           </div>
-        </div>
-      )}
+        ) : (
+          <p className="py-2 text-xs uppercase tracking-wider text-noir-dim">
+            No prediction yet — waiting for events…
+          </p>
+        )}
+
+        {alert && (
+          <div className="mt-2 border-t border-noir-line pt-2">
+            <RiskBadge level={alert.level} />
+            <p className="mt-1 text-xs text-noir-text">{alert.message}</p>
+            <p className="mt-1 text-[10px] uppercase tracking-wider text-noir-muted">
+              Drain prob{" "}
+              {alert.drain_probability != null
+                ? `${(alert.drain_probability * 100).toFixed(1)}%`
+                : "—"}{" "}
+              · Impact {formatPct(alert.price_impact_pct)}
+            </p>
+          </div>
+        )}
+      </div>
     </section>
   );
 }

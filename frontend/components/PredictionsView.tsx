@@ -22,51 +22,44 @@ export default function PredictionsView({
   const recent = [...events].reverse();
 
   return (
-    <section className="overflow-hidden rounded-xl border border-slate-800 bg-slate-900">
-      <div className="border-b border-slate-800 px-6 py-4">
-        <h3 className="font-semibold text-slate-100">Prediction History</h3>
-        <p className="text-xs text-slate-400">
-          Latest {recent.length} on-chain events
-        </p>
+    <section className="panel overflow-hidden">
+      <div className="panel-head">
+        <h3 className="panel-title">Prediction Feed</h3>
+        <p className="panel-sub">{recent.length} EVENTS</p>
       </div>
       <div className="overflow-x-auto">
-        <table className="w-full text-sm">
+        <table className="tbl">
           <thead>
-            <tr className="border-b border-slate-800 text-left text-xs uppercase text-slate-500">
-              <th className="px-6 py-3 font-medium">Time</th>
-              <th className="px-6 py-3 font-medium">Event</th>
-              <th className="px-6 py-3 font-medium">Pair</th>
-              <th className="px-6 py-3 font-medium">Drain</th>
-              <th className="px-6 py-3 font-medium">Impact</th>
-              <th className="px-6 py-3 font-medium">Risk</th>
-              <th className="px-6 py-3 font-medium">Tx</th>
+            <tr>
+              <th>Time</th>
+              <th className="text-left">Event</th>
+              <th className="text-left">Pair</th>
+              <th>Drain%</th>
+              <th>Impact%</th>
+              <th>Risk</th>
+              <th className="text-left">Tx</th>
             </tr>
           </thead>
           <tbody>
             {recent.map((event, index) => (
-              <tr
-                key={`${event.transaction_hash ?? "tx"}-${index}`}
-                className="border-b border-slate-800/60 last:border-0 hover:bg-slate-800/30"
-              >
-                <td className="px-6 py-3 text-slate-300">
+              <tr key={`${event.transaction_hash ?? "tx"}-${index}`}>
+                <td className="text-noir-dim">
                   {new Date(event.timestamp * 1000).toLocaleTimeString()}
                 </td>
-                <td className="px-6 py-3 text-slate-200">{event.event}</td>
-                <td className="px-6 py-3 text-slate-200">{event.pair}</td>
-                <td className="px-6 py-3 text-red-300">
+                <td className="text-left text-noir-amber">{event.event}</td>
+                <td className="text-left">{event.pair}</td>
+                <td className="text-noir-orange">
                   {formatPct(event.prediction?.predicted_drain_percentage)}
                 </td>
-                <td className="px-6 py-3 text-slate-200">
-                  {formatPct(event.prediction?.predicted_price_impact)}
-                </td>
-                <td className="px-6 py-3">
+                <td>{formatPct(event.prediction?.predicted_price_impact)}</td>
+                <td>
                   {event.prediction ? (
                     <RiskBadge level={event.prediction.risk_level} />
                   ) : (
-                    "—"
+                    <span className="text-noir-dim">—</span>
                   )}
                 </td>
-                <td className="px-6 py-3 font-mono text-xs text-slate-500">
+                <td className="text-left text-[10px] text-noir-dim">
                   {shortenAddress(event.transaction_hash)}
                 </td>
               </tr>

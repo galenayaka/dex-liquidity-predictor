@@ -1,18 +1,18 @@
-const BADGE_COLORS: Record<string, string> = {
-  Low: "bg-emerald-500/15 text-emerald-300 border-emerald-500/30",
-  Medium: "bg-amber-500/15 text-amber-300 border-amber-500/30",
-  High: "bg-red-500/15 text-red-300 border-red-500/30",
-  LOW: "bg-emerald-500/15 text-emerald-300 border-emerald-500/30",
-  MEDIUM: "bg-amber-500/15 text-amber-300 border-amber-500/30",
-  HIGH: "bg-red-500/15 text-red-300 border-red-500/30",
-  CRITICAL: "bg-rose-600/20 text-rose-200 border-rose-500/40",
+const BADGE_STYLES: Record<string, string> = {
+  Low: "border-noir-line bg-noir-panel2 text-noir-dim",
+  Medium: "border-noir-line2 bg-noir-panel2 text-noir-amber",
+  High: "border-noir-orange bg-noir-panel2 text-noir-orange text-glow",
+  LOW: "border-noir-line bg-noir-panel2 text-noir-dim",
+  MEDIUM: "border-noir-line2 bg-noir-panel2 text-noir-amber",
+  HIGH: "border-noir-orange bg-noir-panel2 text-noir-orange text-glow",
+  CRITICAL: "border-noir-blood bg-noir-panel2 text-noir-blood blink",
 };
 
 export default function RiskBadge({ level }: { level: string }) {
   return (
     <span
-      className={`inline-flex rounded-full border px-2.5 py-0.5 text-xs font-medium ${
-        BADGE_COLORS[level] ?? "bg-slate-700 text-slate-200 border-slate-600"
+      className={`inline-block border px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-[0.12em] ${
+        BADGE_STYLES[level] ?? "border-noir-line text-noir-muted"
       }`}
     >
       {level}

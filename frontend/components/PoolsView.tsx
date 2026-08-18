@@ -14,57 +14,45 @@ export default function PoolsView({ pools }: { pools: PoolState[] }) {
 
   if (pools.length === 0) {
     return (
-      <EmptyPanel
-        title="Pools"
-        text="Waiting for pool data from the server…"
-      />
+      <EmptyPanel title="Pools" text="Awaiting pool data from server…" />
     );
   }
 
   return (
-    <div className="space-y-6">
-      <section className="overflow-hidden rounded-xl border border-slate-800 bg-slate-900">
-        <div className="border-b border-slate-800 px-6 py-4">
-          <h3 className="font-semibold text-slate-100">Watched Pools</h3>
-          <p className="text-xs text-slate-400">Live on-chain state</p>
+    <div className="space-y-3">
+      <section className="panel overflow-hidden">
+        <div className="panel-head">
+          <h3 className="panel-title">Watched Pools</h3>
+          <p className="panel-sub">Live on-chain state</p>
         </div>
         <div className="overflow-x-auto">
-          <table className="w-full text-sm">
+          <table className="tbl">
             <thead>
-              <tr className="border-b border-slate-800 text-left text-xs uppercase text-slate-500">
-                <th className="px-6 py-3 font-medium">Pool</th>
-                <th className="px-6 py-3 font-medium">Price</th>
-                <th className="px-6 py-3 font-medium">Fee</th>
-                <th className="px-6 py-3 font-medium">Tick</th>
-                <th className="px-6 py-3 font-medium">Liquidity</th>
-                <th className="px-6 py-3 font-medium">TVL</th>
+              <tr>
+                <th>Pool</th>
+                <th>Price</th>
+                <th>Fee</th>
+                <th>Tick</th>
+                <th>Liquidity</th>
+                <th>TVL</th>
               </tr>
             </thead>
             <tbody>
               {pools.map((pool) => (
-                <tr
-                  key={pool.address}
-                  className="border-b border-slate-800/60 last:border-0 hover:bg-slate-800/30"
-                >
-                  <td className="px-6 py-3">
-                    <div className="font-medium text-slate-100">
+                <tr key={pool.address}>
+                  <td>
+                    <div className="text-noir-amber">
                       {pool.token0.symbol}/{pool.token1.symbol}
                     </div>
-                    <div className="text-xs text-slate-500">
+                    <div className="text-[10px] text-noir-dim">
                       {shortenAddress(pool.address)}
                     </div>
                   </td>
-                  <td className="px-6 py-3 text-slate-200">
-                    {formatPrice(pool.price)}
-                  </td>
-                  <td className="px-6 py-3 text-slate-200">
-                    {(pool.fee / 10000).toFixed(2)}%
-                  </td>
-                  <td className="px-6 py-3 text-slate-200">{pool.tick}</td>
-                  <td className="px-6 py-3 text-slate-200">
-                    {pool.liquidity.toLocaleString()}
-                  </td>
-                  <td className="px-6 py-3 text-slate-200">
+                  <td>{formatPrice(pool.price)}</td>
+                  <td>{(pool.fee / 10000).toFixed(2)}%</td>
+                  <td>{pool.tick}</td>
+                  <td>{pool.liquidity.toLocaleString()}</td>
+                  <td>
                     {pool.tvl_usd != null ? formatUsd(pool.tvl_usd) : "—"}
                   </td>
                 </tr>
@@ -74,20 +62,16 @@ export default function PoolsView({ pools }: { pools: PoolState[] }) {
         </div>
       </section>
 
-      <section className="rounded-xl border border-slate-800 bg-slate-900 p-6">
-        <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+      <section className="panel overflow-hidden">
+        <div className="panel-head">
           <div>
-            <h3 className="font-semibold text-slate-100">
-              Historical Liquidity
-            </h3>
-            <p className="text-xs text-slate-400">
-              Last 24 hours · token A reserve (USD)
-            </p>
+            <h3 className="panel-title">Historical Liquidity</h3>
+            <p className="panel-sub">Last 24h · Token A reserve (USD)</p>
           </div>
           <select
             value={activeAddress ?? ""}
             onChange={(event) => setSelected(event.target.value)}
-            className="rounded-md border border-slate-700 bg-slate-800 px-3 py-1.5 text-sm text-slate-200 focus:outline-none"
+            className="border border-noir-line bg-black px-2 py-1 text-xs uppercase tracking-wider text-noir-amber focus:outline-none"
           >
             {pools.map((pool) => (
               <option key={pool.address} value={pool.address}>
@@ -98,20 +82,22 @@ export default function PoolsView({ pools }: { pools: PoolState[] }) {
         </div>
 
         {error && (
-          <p className="mb-4 text-sm text-amber-300">
-            Historical data unavailable — start the backend (and PostgreSQL) to
-            populate metrics.
+          <p className="border-b border-noir-line bg-noir-panel2 px-2 py-1 text-xs text-noir-muted">
+            Historical data unavailable — start backend + PostgreSQL
           </p>
         )}
 
         {loading && points.length === 0 ? (
-          <p className="text-sm text-slate-500">Loading historical data…</p>
+          <p className="px-2 py-4 text-xs uppercase tracking-wider text-noir-dim">
+            Loading historical data…
+          </p>
         ) : (
           <LiquidityChart
             data={points}
-            title="Historical Liquidity (24h)"
-            subtitle="token A reserve (USD)"
+            title="Historical Liquidity"
+            subtitle="Token A reserve (USD)"
             live={false}
+            bordered={false}
           />
         )}
       </section>

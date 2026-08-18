@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef } from "react";
+import { useTheme } from "@/components/ThemeProvider";
 import {
   ColorType,
   createChart,
@@ -18,11 +19,32 @@ interface LiquidityChartProps {
   subtitle?: string;
   /** Show the pulsing "Live" badge (disable for historical views). */
   live?: boolean;
+  /** Render the surrounding bordered panel (disable when nested). */
+  bordered?: boolean;
   height?: number;
 }
 
 function toPoint(point: LiquidityPoint): { time: UTCTimestamp; value: number } {
   return { time: point.time as UTCTimestamp, value: point.value };
+}
+
+function hexToRgba(hex: string, alpha: number): string {
+  const h = hex.replace("#", "");
+  const full = h.length === 3 ? h.split("").map((c) => c + c).join("") : h;
+  const num = parseInt(full, 16);
+  if (Number.isNaN(num)) return `rgba(255, 153, 0, ${alpha})`;
+  const r = (num >> 16) & 255;
+  const g = (num >> 8) & 255;
+  const b = num & 255;
+  return `rgba(${r}, ${g}, ${b}, ${alpha})`;
+}
+
+function readAccentColors(): { accent: string; muted: string } {
+  const cs = getComputedStyle(document.documentElement);
+  return {
+    accent: cs.getPropertyValue("--noir-accent2").trim() || "#FF9900",
+    muted: cs.getPropertyValue("--noir-muted").trim() || "#c28f3a",
+  };
 }
 
 /**
@@ -35,53 +57,61 @@ function toPoint(point: LiquidityPoint): { time: UTCTimestamp; value: number } {
 export default function LiquidityChart({
   data,
   title = "Pool Liquidity",
-  subtitle = "Real-time pool liquidity movements (×10¹⁸)",
+  subtitle = "Raw liquidity ×10¹⁸",
   live = true,
+  bordered = true,
   height = 280,
 }: LiquidityChartProps) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const chartRef = useRef<IChartApi | null>(null);
   const seriesRef = useRef<ISeriesApi<"Area"> | null>(null);
   const appliedRef = useRef(0);
+  const { theme } = useTheme();
 
   // Create the chart + series once on mount.
   useEffect(() => {
     const container = containerRef.current;
     if (!container) return;
 
+    const { accent, muted } = readAccentColors();
+
     const chart = createChart(container, {
       width: container.clientWidth,
       height,
       layout: {
         background: { type: ColorType.Solid, color: "transparent" },
-        textColor: "#94a3b8",
-        fontSize: 11,
+        textColor: muted,
+        fontSize: 10,
+        fontFamily: "'JetBrains Mono', 'Roboto Mono', monospace",
       },
       grid: {
-        vertLines: { color: "rgba(148, 163, 184, 0.08)" },
-        horzLines: { color: "rgba(148, 163, 184, 0.08)" },
+        vertLines: { color: hexToRgba(accent, 0.06) },
+        horzLines: { color: hexToRgba(accent, 0.06) },
       },
       crosshair: {
         mode: CrosshairMode.Normal,
       },
       rightPriceScale: {
-        borderColor: "rgba(148, 163, 184, 0.25)",
+        borderColor: hexToRgba(accent, 0.25),
       },
       timeScale: {
-        borderColor: "rgba(148, 163, 184, 0.25)",
+        borderColor: hexToRgba(accent, 0.25),
         timeVisible: true,
         secondsVisible: false,
       },
       localization: {
-        priceFormatter: (price: number) => price.toFixed(3),
+        priceFormatter: (price: number) =>
+          Math.abs(price) >= 1000
+            ? price.toLocaleString(undefined, { maximumFractionDigits: 0 })
+            : price.toFixed(3),
       },
     });
 
     const series = chart.addAreaSeries({
-      lineColor: "#38bdf8",
-      topColor: "rgba(56, 189, 248, 0.35)",
-      bottomColor: "rgba(56, 189, 248, 0.02)",
-      lineWidth: 2,
+      lineColor: accent,
+      topColor: hexToRgba(accent, 0.32),
+      bottomColor: hexToRgba(accent, 0.01),
+      lineWidth: 1,
       priceLineVisible: false,
       lastValueVisible: true,
     });
@@ -112,6 +142,28 @@ export default function LiquidityChart({
     chartRef.current?.applyOptions({ height });
   }, [height]);
 
+  // Re-apply accent colors when the UI theme changes.
+  useEffect(() => {
+    const chart = chartRef.current;
+    const series = seriesRef.current;
+    if (!chart || !series) return;
+    const { accent, muted } = readAccentColors();
+    chart.applyOptions({
+      layout: { textColor: muted },
+      grid: {
+        vertLines: { color: hexToRgba(accent, 0.06) },
+        horzLines: { color: hexToRgba(accent, 0.06) },
+      },
+      rightPriceScale: { borderColor: hexToRgba(accent, 0.25) },
+      timeScale: { borderColor: hexToRgba(accent, 0.25) },
+    });
+    series.applyOptions({
+      lineColor: accent,
+      topColor: hexToRgba(accent, 0.32),
+      bottomColor: hexToRgba(accent, 0.01),
+    });
+  }, [theme]);
+
   // Push only the newly arrived points into the series (in-place update).
   useEffect(() => {
     const series = seriesRef.current;
@@ -132,16 +184,16 @@ export default function LiquidityChart({
   }, [data]);
 
   return (
-    <section className="rounded-xl border border-slate-800 bg-slate-900 p-6">
-      <div className="mb-4 flex items-center justify-between">
+    <section className={bordered ? "panel p-2" : "p-2"}>
+      <div className="mb-1 flex items-center justify-between gap-2">
         <div>
-          <h3 className="font-semibold text-slate-100">{title}</h3>
-          <p className="text-xs text-slate-400">{subtitle}</p>
+          <h3 className="panel-title">{title}</h3>
+          <p className="panel-sub">{subtitle}</p>
         </div>
         {live && (
-          <span className="inline-flex items-center gap-1.5 text-xs text-emerald-300">
+          <span className="flex items-center gap-1.5 text-[10px] uppercase tracking-[0.16em] text-noir-amber">
             <span
-              className="h-2 w-2 animate-pulse rounded-full bg-emerald-400"
+              className="h-2 w-2 animate-pulse rounded-full bg-noir-orange dot-glow"
               aria-hidden="true"
             />
             Live

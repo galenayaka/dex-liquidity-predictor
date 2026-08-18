@@ -3,65 +3,52 @@
 import { formatPrice, formatUsd, shortenAddress } from "@/lib/format";
 import type { PoolState } from "@/lib/types";
 
-interface PricePanelProps {
-  pools: PoolState[];
-}
-
-export default function PricePanel({ pools }: PricePanelProps) {
+export default function PricePanel({ pools }: { pools: PoolState[] }) {
   if (pools.length === 0) {
     return (
-      <section className="rounded-xl border border-slate-800 bg-slate-900 p-6">
-        <h3 className="font-semibold text-slate-100">Pool Prices</h3>
-        <p className="mt-4 text-sm text-slate-400">
-          Waiting for snapshot data from the server…
+      <section className="panel p-4">
+        <h3 className="text-xs font-bold uppercase tracking-[0.18em] text-noir-amber">
+          Pool Prices
+        </h3>
+        <p className="mt-2 text-xs uppercase tracking-wider text-noir-dim">
+          Awaiting snapshot data from server…
         </p>
       </section>
     );
   }
 
   return (
-    <section className="overflow-hidden rounded-xl border border-slate-800 bg-slate-900">
-      <div className="border-b border-slate-800 px-6 py-4">
-        <h3 className="font-semibold text-slate-100">Pool Prices</h3>
-        <p className="text-xs text-slate-400">
-          Live on-chain state for watched pools
-        </p>
+    <section className="panel overflow-hidden">
+      <div className="panel-head">
+        <h3 className="panel-title">Pool Prices</h3>
+        <p className="panel-sub">Live on-chain state</p>
       </div>
       <div className="overflow-x-auto">
-        <table className="w-full text-sm">
+        <table className="tbl">
           <thead>
-            <tr className="border-b border-slate-800 text-left text-xs uppercase text-slate-500">
-              <th className="px-6 py-3 font-medium">Pool</th>
-              <th className="px-6 py-3 font-medium">Price</th>
-              <th className="px-6 py-3 font-medium">Fee</th>
-              <th className="px-6 py-3 font-medium">Tick</th>
-              <th className="px-6 py-3 font-medium">TVL</th>
+            <tr>
+              <th>Pool</th>
+              <th>Price</th>
+              <th>Fee</th>
+              <th>Tick</th>
+              <th>TVL</th>
             </tr>
           </thead>
           <tbody>
             {pools.map((pool) => (
-              <tr
-                key={pool.address}
-                className="border-b border-slate-800/60 last:border-0 hover:bg-slate-800/30"
-              >
-                <td className="px-6 py-3">
-                  <div className="font-medium text-slate-100">
+              <tr key={pool.address}>
+                <td>
+                  <div className="text-noir-amber">
                     {pool.token0.symbol}/{pool.token1.symbol}
                   </div>
-                  <div className="text-xs text-slate-500">
+                  <div className="text-[10px] text-noir-dim">
                     {shortenAddress(pool.address)}
                   </div>
                 </td>
-                <td className="px-6 py-3 text-slate-200">
-                  {formatPrice(pool.price)}
-                </td>
-                <td className="px-6 py-3 text-slate-200">
-                  {(pool.fee / 10000).toFixed(2)}%
-                </td>
-                <td className="px-6 py-3 text-slate-200">{pool.tick}</td>
-                <td className="px-6 py-3 text-slate-200">
-                  {pool.tvl_usd != null ? formatUsd(pool.tvl_usd) : "—"}
-                </td>
+                <td>{formatPrice(pool.price)}</td>
+                <td>{(pool.fee / 10000).toFixed(2)}%</td>
+                <td>{pool.tick}</td>
+                <td>{pool.tvl_usd != null ? formatUsd(pool.tvl_usd) : "—"}</td>
               </tr>
             ))}
           </tbody>

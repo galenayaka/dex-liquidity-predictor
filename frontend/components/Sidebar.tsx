@@ -17,16 +17,16 @@ const NAV_ITEMS: { key: View; label: string }[] = [
   { key: "settings", label: "Settings" },
 ];
 
-function statusStyles(status: ConnectionStatus): { dot: string; label: string } {
+function statusStyles(status: ConnectionStatus): { label: string } {
   switch (status) {
     case "open":
-      return { dot: "bg-emerald-400", label: "Live" };
+      return { label: "LIVE" };
     case "connecting":
-      return { dot: "bg-amber-400", label: "Connecting" };
+      return { label: "LINKING" };
     case "error":
-      return { dot: "bg-rose-400", label: "Error" };
+      return { label: "ERROR" };
     default:
-      return { dot: "bg-slate-500", label: "Offline" };
+      return { label: "OFFLINE" };
   }
 }
 
@@ -37,27 +37,32 @@ interface SidebarProps {
 }
 
 export default function Sidebar({ status, active, onNavigate }: SidebarProps) {
+  const live = status === "open";
   const statusInfo = statusStyles(status);
 
   return (
-    <aside className="flex w-64 shrink-0 flex-col border-r border-slate-800 bg-slate-900">
-      <div className="border-b border-slate-800 p-5">
-        <h1 className="text-base font-semibold text-slate-100">
-          DEX Liquidity Predictor
+    <aside className="flex w-56 shrink-0 flex-col border-r border-noir-line bg-black">
+      <div className="border-b border-noir-line p-3">
+        <h1 className="text-sm font-bold uppercase leading-tight tracking-[0.18em] text-noir-amber text-glow">
+          DEX Liquidity
+          <br />
+          Predictor
         </h1>
-        <p className="mt-1 text-xs text-slate-400">Uniswap v3 analytics</p>
+        <p className="mt-1 text-[10px] uppercase tracking-[0.2em] text-noir-dim">
+          Uniswap V3 Terminal
+        </p>
       </div>
 
-      <nav className="flex-1 space-y-1 p-3">
+      <nav className="flex-1 space-y-px p-2">
         {NAV_ITEMS.map((item) => (
           <button
             key={item.key}
             type="button"
             onClick={() => onNavigate(item.key)}
-            className={`block w-full rounded-md px-3 py-2 text-left text-sm transition-colors ${
+            className={`block w-full border-l-2 px-3 py-1.5 text-left text-xs uppercase tracking-[0.14em] transition-colors ${
               item.key === active
-                ? "bg-slate-800 font-medium text-white"
-                : "text-slate-400 hover:bg-slate-800/60 hover:text-slate-200"
+                ? "border-noir-amber bg-noir-panel2 font-bold text-noir-amber"
+                : "border-transparent text-noir-muted hover:bg-noir-panel2 hover:text-noir-text"
             }`}
           >
             {item.label}
@@ -65,12 +70,14 @@ export default function Sidebar({ status, active, onNavigate }: SidebarProps) {
         ))}
       </nav>
 
-      <div className="flex items-center gap-2 border-t border-slate-800 p-4 text-xs text-slate-400">
+      <div className="flex items-center gap-2 border-t border-noir-line px-3 py-2.5 text-[10px] uppercase tracking-[0.16em] text-noir-dim">
         <span
-          className={`h-2 w-2 rounded-full ${statusInfo.dot}`}
+          className={`h-2 w-2 rounded-full ${
+            live ? "bg-noir-orange dot-glow animate-pulse" : "bg-noir-line"
+          }`}
           aria-hidden="true"
         />
-        <span>WebSocket: {statusInfo.label}</span>
+        <span>WS: {statusInfo.label}</span>
       </div>
     </aside>
   );

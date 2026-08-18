@@ -2,7 +2,210 @@
 @tailwind components;
 @tailwind utilities;
 
-html,
-body {
-  height: 100%;
+/* ------------------------------------------------------------------ */
+/* Noir terminal color palettes (default: amber)                       */
+/* ------------------------------------------------------------------ */
+:root {
+  --noir-accent: #ffb000;
+  --noir-accent2: #ff9900;
+  --noir-text: #ffd27a;
+  --noir-muted: #c28f3a;
+  --noir-dim: #7d5c20;
+  --noir-line: #2b1d0a;
+  --noir-line2: #3d2c12;
+  --noir-line-soft: #161106;
+  --noir-panel: #050505;
+  --noir-panel2: #0a0805;
+  --noir-danger: #ff3b00;
+}
+
+:root[data-theme="green"] {
+  --noir-accent: #00ff66;
+  --noir-accent2: #00d95c;
+  --noir-text: #c2ffdd;
+  --noir-muted: #4fd68a;
+  --noir-dim: #1e7a45;
+  --noir-line: #0a2415;
+  --noir-line2: #123d22;
+  --noir-line-soft: #07170d;
+  --noir-panel: #020604;
+  --noir-panel2: #06100a;
+  --noir-danger: #ff3b00;
+}
+
+:root[data-theme="cyan"] {
+  --noir-accent: #00e5ff;
+  --noir-accent2: #00b8d4;
+  --noir-text: #bdf3ff;
+  --noir-muted: #4fc3d4;
+  --noir-dim: #1e6f7a;
+  --noir-line: #0a1f24;
+  --noir-line2: #12343d;
+  --noir-line-soft: #07141a;
+  --noir-panel: #020506;
+  --noir-panel2: #061014;
+  --noir-danger: #ff3b00;
+}
+
+:root[data-theme="red"] {
+  --noir-accent: #ff4d4d;
+  --noir-accent2: #ff2d2d;
+  --noir-text: #ffc4c4;
+  --noir-muted: #d47070;
+  --noir-dim: #7a2a2a;
+  --noir-line: #240a0a;
+  --noir-line2: #3d1212;
+  --noir-line-soft: #160606;
+  --noir-panel: #060202;
+  --noir-panel2: #100606;
+  --noir-danger: #ffd500;
+}
+
+:root[data-theme="magenta"] {
+  --noir-accent: #ff2e97;
+  --noir-accent2: #ff4fae;
+  --noir-text: #ffc9e6;
+  --noir-muted: #d46aa8;
+  --noir-dim: #7a2a5a;
+  --noir-line: #240a17;
+  --noir-line2: #3d1228;
+  --noir-line-soft: #16070f;
+  --noir-panel: #060205;
+  --noir-panel2: #10060c;
+  --noir-danger: #ff3b00;
+}
+
+:root[data-theme="white"] {
+  --noir-accent: #e8e8e8;
+  --noir-accent2: #d0d0d0;
+  --noir-text: #ffffff;
+  --noir-muted: #a8a8a8;
+  --noir-dim: #666666;
+  --noir-line: #1f1f1f;
+  --noir-line2: #333333;
+  --noir-line-soft: #141414;
+  --noir-panel: #050505;
+  --noir-panel2: #0a0a0a;
+  --noir-danger: #ff3b00;
+}
+
+@layer base {
+  html,
+  body {
+    height: 100%;
+  }
+
+  body {
+    background-color: #000000;
+    color: var(--noir-text);
+    font-family: var(--font-jetbrains), "JetBrains Mono", "Roboto Mono",
+      "SF Mono", Menlo, Consolas, monospace;
+    font-size: 13px;
+    line-height: 1.45;
+    letter-spacing: 0.01em;
+  }
+
+  ::selection {
+    background: var(--noir-accent2);
+    color: #000000;
+  }
+
+  ::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+  }
+  ::-webkit-scrollbar-track {
+    background: #000000;
+  }
+  ::-webkit-scrollbar-thumb {
+    background: var(--noir-line);
+    border: 1px solid var(--noir-line2);
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    background: var(--noir-accent2);
+  }
+}
+
+@layer components {
+  /* Boxed panel with harsh square corners and a thin divider. */
+  .panel {
+    background: var(--noir-panel);
+    border: 1px solid var(--noir-line);
+  }
+
+  .panel-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    padding: 6px 10px;
+    border-bottom: 1px solid var(--noir-line);
+  }
+
+  .panel-title {
+    color: var(--noir-accent);
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+    text-shadow: 0 0 8px var(--noir-accent);
+  }
+
+  .panel-sub {
+    color: var(--noir-dim);
+    font-size: 10px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+  }
+
+  /* Dense ticker table: numeric columns right-aligned. */
+  .tbl {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 12px;
+  }
+  .tbl th {
+    color: var(--noir-dim);
+    font-size: 10px;
+    font-weight: 400;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    text-align: right;
+    padding: 4px 8px;
+    border-bottom: 1px solid var(--noir-line);
+    white-space: nowrap;
+  }
+  .tbl th:first-child {
+    text-align: left;
+  }
+  .tbl td {
+    padding: 4px 8px;
+    border-bottom: 1px solid var(--noir-line-soft);
+    text-align: right;
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+    color: var(--noir-text);
+  }
+  .tbl td:first-child {
+    text-align: left;
+  }
+  .tbl tbody tr:hover {
+    background: var(--noir-panel2);
+  }
+
+  .text-glow {
+    text-shadow: 0 0 8px var(--noir-accent);
+  }
+  .dot-glow {
+    box-shadow: 0 0 6px 1px var(--noir-accent2);
+  }
+  .blink {
+    animation: noir-blink 1.1s step-end infinite;
+  }
+}
+
+@keyframes noir-blink {
+  50% {
+    opacity: 0.3;
+  }
 }
