@@ -33,7 +33,7 @@ def main() -> None:
     logger.info("Date range: %s -> %s", df.index.min().date(), df.index.max().date())
 
     model, metrics, _ = train(df, features, args.target, ensemble=not args.no_ensemble)
-    save_model(model, features, args.target, args.ticker)
+    save_model(model, features, args.target, args.ticker, metrics)
 
     logger.info("Evaluation on held-out test set:")
     for name, value in metrics.items():

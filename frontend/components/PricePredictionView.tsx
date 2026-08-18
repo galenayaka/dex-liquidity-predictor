@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Explain from "@/components/Explain";
 
 const FORECAST_URL =
@@ -50,6 +50,14 @@ interface ForecastResult {
   predicted_price?: number | null;
   predicted_direction?: number | null;
   probability_up?: number | null;
+  confidence?: number | null;
+  interval_low?: number | null;
+  interval_high?: number | null;
+  model_rmse?: number | null;
+  model_mae?: number | null;
+  model_r2?: number | null;
+  model_accuracy?: number | null;
+  ensemble_size?: number | null;
 }
 
 export default function PricePredictionView() {
@@ -60,12 +68,54 @@ export default function PricePredictionView() {
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState<ForecastResult | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [asOf, setAsOf] = useState<string | null>(null);
+  const [fetchingLatest, setFetchingLatest] = useState(false);
+
+  const loadLatest = async (key: Ticker) => {
+    setFetchingLatest(true);
+    try {
+      const controller = new AbortController();
+      const timer = setTimeout(() => controller.abort(), 8000);
+      const res = await fetch(`${FORECAST_URL}/latest/${key}`, {
+        signal: controller.signal,
+      });
+      clearTimeout(timer);
+      if (!res.ok) return;
+      const data: unknown = await res.json().catch(() => null);
+      if (!data || typeof data !== "object") return;
+      const feats = (data as { features?: unknown }).features;
+      if (feats && typeof feats === "object") {
+        const featMap = feats as Record<string, unknown>;
+        setValues((prev) => {
+          const next = { ...prev };
+          for (const f of FIELDS) {
+            const v = Number(featMap[f.key]);
+            if (Number.isFinite(v)) next[f.key] = v;
+          }
+          return next;
+        });
+      }
+      const asOfValue = (data as { as_of?: unknown }).as_of;
+      if (typeof asOfValue === "string") setAsOf(asOfValue);
+    } catch {
+      // keep example defaults if the service is unreachable
+    } finally {
+      setFetchingLatest(false);
+    }
+  };
+
+  useEffect(() => {
+    void loadLatest("btc");
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const selectTicker = (key: Ticker) => {
     setTicker(key);
     setValues(TICKER_DEFAULTS[key]);
     setResult(null);
     setError(null);
+    setAsOf(null);
+    void loadLatest(key);
   };
 
   const setField = (key: FieldKey, raw: string) => {
@@ -121,6 +171,53 @@ export default function PricePredictionView() {
         <b>Predict</b>. It is an estimate, not financial advice.
       </Explain>
 
+      <Explain title="Math: how the number is computed">
+        <p className="mb-2">
+          The model learns a function <code>f</code> that maps today&apos;s 10
+          inputs to tomorrow&apos;s closing price.
+        </p>
+        <ol className="list-decimal space-y-1.5 pl-5">
+          <li>
+            <b>Target.</b> Each training day predicts the <i>next</i> day&apos;s
+            close: <code>y_t = close_(t+1)</code> — so the answer is never fed
+            in as an input.
+          </li>
+          <li>
+            <b>Standardization.</b> Features are centered and scaled before
+            training: <code>z = (x − μ) / σ</code>.
+          </li>
+          <li>
+            <b>Gradient boosting.</b> Two tree ensembles minimize squared error{" "}
+            <code>Σ (close_(t+1) − ŷ_t)²</code>:
+            <ul className="ml-4 list-disc">
+              <li><b>XGBoost</b> — 300 boosted decision trees (depth 5).</li>
+              <li><b>HistGradientBoosting</b> — histogram-based boosted trees.</li>
+            </ul>
+          </li>
+          <li>
+            <b>Ensemble.</b> The forecast averages the two models:{" "}
+            <code>ŷ = (xgb(x) + hgb(x)) / 2</code>.
+          </li>
+          <li>
+            <b>Train/test split.</b> Chronological 80/20: the model trains on the
+            past and is scored only on strictly future days (no look-ahead bias).
+          </li>
+          <li>
+            <b>Confidence.</b> How closely the two models agree, scaled by typical
+            error: <code>confidence = max(0, 100 × (1 − spread / (2·RMSE)))</code>.
+            Perfect agreement → 100%.
+          </li>
+          <li>
+            <b>95% interval.</b> <code>ŷ ± 1.96 × RMSE</code>, where RMSE is the
+            model&apos;s error on the held-out test set.
+          </li>
+        </ol>
+        <p className="mt-2">
+          These are statistical estimates from historical patterns — not a
+          guarantee of future price movement.
+        </p>
+      </Explain>
+
       <section className="panel max-w-3xl">
         <div className="panel-head">
           <h3 className="panel-title">Price Prediction</h3>
@@ -160,6 +257,24 @@ export default function PricePredictionView() {
             ))}
           </div>
 
+          <div className="mt-2 flex items-center gap-3">
+            <span className="text-[10px] uppercase tracking-wider text-noir-dim">
+              {fetchingLatest
+                ? "Loading live data…"
+                : asOf
+                  ? `Live data as of ${asOf}`
+                  : "Example defaults (live data unavailable)"}
+            </span>
+            <button
+              type="button"
+              onClick={() => void loadLatest(ticker)}
+              disabled={fetchingLatest}
+              className="border border-noir-line px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-noir-muted hover:text-noir-text disabled:opacity-50"
+            >
+              Reload latest
+            </button>
+          </div>
+
           <div className="mt-3 flex items-center gap-3">
             <button
               type="button"
@@ -196,6 +311,16 @@ export default function PricePredictionView() {
                     Probability up:{" "}
                     {(((result.probability_up ?? 0) * 100)).toFixed(1)}%
                   </div>
+                  {typeof result.confidence === "number" && (
+                    <div className="mt-0.5 text-xs text-noir-muted">
+                      Confidence: {result.confidence.toFixed(1)}%
+                    </div>
+                  )}
+                  {result.model_accuracy != null && (
+                    <div className="mt-1 text-[10px] uppercase tracking-wider text-noir-dim">
+                      Model accuracy: {(result.model_accuracy * 100).toFixed(1)}%
+                    </div>
+                  )}
                 </div>
               ) : (
                 <div>
@@ -207,6 +332,62 @@ export default function PricePredictionView() {
                     {(result.predicted_price ?? 0).toLocaleString(undefined, {
                       maximumFractionDigits: 0,
                     })}
+                  </div>
+
+                  {typeof result.confidence === "number" && (
+                    <div className="mt-2">
+                      <div className="flex items-center justify-between text-[10px] uppercase tracking-wider text-noir-dim">
+                        <span>Confidence</span>
+                        <span className="text-noir-text">
+                          {result.confidence.toFixed(1)}%
+                        </span>
+                      </div>
+                      <div className="mt-0.5 h-1.5 w-full border border-noir-line bg-black">
+                        <div
+                          className="h-full bg-noir-amber"
+                          style={{ width: `${Math.min(100, result.confidence)}%` }}
+                        />
+                      </div>
+                    </div>
+                  )}
+
+                  {result.interval_low != null && result.interval_high != null && (
+                    <div className="mt-2 text-xs text-noir-muted">
+                      95% range:{" "}
+                      <span className="text-noir-text">
+                        $
+                        {(result.interval_low ?? 0).toLocaleString(undefined, {
+                          maximumFractionDigits: 0,
+                        })}{" "}
+                        – $
+                        {(result.interval_high ?? 0).toLocaleString(undefined, {
+                          maximumFractionDigits: 0,
+                        })}
+                      </span>
+                    </div>
+                  )}
+
+                  <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-[10px] uppercase tracking-wider text-noir-dim">
+                    {result.model_r2 != null && <span>R² {result.model_r2.toFixed(3)}</span>}
+                    {result.model_rmse != null && (
+                      <span>
+                        RMSE $
+                        {(result.model_rmse ?? 0).toLocaleString(undefined, {
+                          maximumFractionDigits: 0,
+                        })}
+                      </span>
+                    )}
+                    {result.model_mae != null && (
+                      <span>
+                        MAE $
+                        {(result.model_mae ?? 0).toLocaleString(undefined, {
+                          maximumFractionDigits: 0,
+                        })}
+                      </span>
+                    )}
+                    {result.ensemble_size != null && (
+                      <span>{result.ensemble_size}-model ensemble</span>
+                    )}
                   </div>
                 </div>
               )}

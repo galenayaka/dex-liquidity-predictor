@@ -89,15 +89,95 @@ def train(
     return model, metrics, results
 
 
-def save_model(model: Any, features: list[str], target_type: str, ticker: str) -> None:
+def save_model(
+    model: Any,
+    features: list[str],
+    target_type: str,
+    ticker: str,
+    metrics: dict[str, Any] | None = None,
+) -> None:
     """Persist the fitted model + metadata needed by the serving API."""
     MODEL_DIR.mkdir(parents=True, exist_ok=True)
     joblib.dump(model, MODEL_DIR / f"{ticker}_{target_type}_model.joblib")
-    meta = {"features": features, "target_type": target_type, "ticker": ticker}
+    meta = {
+        "features": features,
+        "target_type": target_type,
+        "ticker": ticker,
+        "metrics": metrics or {},
+    }
     (MODEL_DIR / f"{ticker}_{target_type}_meta.json").write_text(
         json.dumps(meta, indent=2)
     )
     logger.info("Saved model to %s", MODEL_DIR)
+
+
+def _member_predictions(model: Any, row: pd.DataFrame) -> list[float]:
+    """Collect each base estimator's prediction (works for sklearn ensembles)."""
+    if hasattr(model, "estimators_"):
+        preds: list[float] = []
+        for item in model.estimators_:
+            est = item[1] if isinstance(item, tuple) else item
+            preds.append(float(est.predict(row)[0]))
+        return preds
+    return [float(model.predict(row)[0])]
+
+
+def predict_with_uncertainty(
+    model: Any, row: pd.DataFrame, meta: dict[str, Any]
+) -> dict[str, Any]:
+    """Return the forecast plus confidence / interval / model-quality info.
+
+    Regression: confidence reflects how closely the ensemble members agree,
+    scaled by the held-out test RMSE; the interval is ŷ ± 1.96·RMSE.
+    Classification: confidence is the predicted class probability.
+    """
+    target_type = meta["target_type"]
+    metrics: dict[str, Any] = meta.get("metrics", {})
+
+    if target_type == "classification":
+        direction = int(model.predict(row)[0])
+        proba = float(model.predict_proba(row)[0][1])
+        conf = proba if direction == 1 else 1.0 - proba
+        acc = metrics.get("accuracy")
+        return {
+            "ticker": meta.get("ticker"),
+            "target_type": target_type,
+            "predicted_direction": direction,
+            "probability_up": proba,
+            "confidence": round(conf * 100.0, 1),
+            "model_accuracy": round(acc, 4) if acc is not None else None,
+        }
+
+    price = float(model.predict(row)[0])
+    member_preds = _member_predictions(model, row)
+    spread = (
+        float(max(member_preds) - min(member_preds))
+        if len(member_preds) > 1
+        else 0.0
+    )
+
+    rmse = metrics.get("rmse")
+    if rmse and rmse > 0:
+        interval_low = price - 1.96 * rmse
+        interval_high = price + 1.96 * rmse
+        # Perfect agreement -> 100; disagreement of 2·RMSE -> 0.
+        confidence = max(0.0, 100.0 * (1.0 - spread / (2.0 * rmse)))
+    else:
+        interval_low = interval_high = None
+        confidence = None
+
+    return {
+        "ticker": meta.get("ticker"),
+        "target_type": target_type,
+        "predicted_price": price,
+        "confidence": round(confidence, 1) if confidence is not None else None,
+        "interval_low": round(interval_low, 2) if interval_low is not None else None,
+        "interval_high": round(interval_high, 2) if interval_high is not None else None,
+        "model_rmse": round(rmse, 2) if rmse is not None else None,
+        "model_mae": round(metrics.get("mae"), 2) if metrics.get("mae") is not None else None,
+        "model_r2": round(metrics.get("r2"), 4) if metrics.get("r2") is not None else None,
+        "ensemble_size": len(member_preds),
+    }
 
 
 def load_model(ticker: str, target_type: str = TARGET_TYPE) -> tuple[Any, dict[str, Any]]:

@@ -12,5 +12,10 @@
     "gpr"
   ],
   "target_type": "regression",
-  "ticker": "eth"
+  "ticker": "eth",
+  "metrics": {
+    "mae": 108.73232329591185,
+    "rmse": 134.63337303761006,
+    "r2": 0.9435219574482235
+  }
 }

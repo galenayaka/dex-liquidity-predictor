@@ -11,8 +11,9 @@ import pandas as pd
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 
-from config import TARGET_TYPE, TICKERS
-from model import load_model
+from config import FEATURE_COLUMNS, TARGET_TYPE, TICKERS
+from data_source import fetch_all
+from model import load_model, predict_with_uncertainty
 from schemas import PredictRequest, PredictResponse
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
@@ -53,6 +54,40 @@ def health() -> dict:
     return {"status": "ok", "models_loaded": sorted(MODELS.keys())}
 
 
+@app.get("/latest/{ticker}")
+def latest(ticker: str) -> dict:
+    """Return the most recent real feature snapshot to prefill the form."""
+    key = ticker.lower()
+    if key not in TICKERS:
+        raise HTTPException(
+            status_code=404,
+            detail=f"Unsupported ticker '{ticker}'. Use one of: {sorted(TICKERS)}.",
+        )
+    try:
+        raw = fetch_all(key)  # cached for a day
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("Could not fetch latest data for %s: %s", key, exc)
+        raise HTTPException(
+            status_code=503,
+            detail=f"Could not fetch latest data for '{key}': {exc}",
+        ) from exc
+
+    row = raw.iloc[-1]
+    features: dict[str, float | None] = {}
+    for name in FEATURE_COLUMNS:
+        try:
+            num = float(row[name])
+        except (TypeError, ValueError):
+            num = float("nan")
+        features[name] = None if pd.isna(num) else round(num, 6)
+
+    return {
+        "ticker": key,
+        "as_of": str(raw.index[-1].date()),
+        "features": features,
+    }
+
+
 @app.post("/predict/{ticker}", response_model=PredictResponse)
 def predict(ticker: str, body: PredictRequest) -> PredictResponse:
     key = ticker.lower()
@@ -73,15 +108,4 @@ def predict(ticker: str, body: PredictRequest) -> PredictResponse:
     # Build a single-row frame in the exact persisted feature order.
     row = pd.DataFrame([{f: getattr(body, f) for f in features}])[features]
 
-    if meta["target_type"] == "classification":
-        direction = int(model.predict(row)[0])
-        proba = float(model.predict_proba(row)[0][1])
-        return PredictResponse(
-            ticker=key,
-            target_type="classification",
-            predicted_direction=direction,
-            probability_up=proba,
-        )
-
-    price = float(model.predict(row)[0])
-    return PredictResponse(ticker=key, target_type="regression", predicted_price=price)
+    return PredictResponse(**predict_with_uncertainty(model, row, meta))

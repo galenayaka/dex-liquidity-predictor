@@ -25,3 +25,11 @@ class PredictResponse(BaseModel):
     predicted_price: float | None = None
     predicted_direction: int | None = None
     probability_up: float | None = None
+    confidence: float | None = None
+    interval_low: float | None = None
+    interval_high: float | None = None
+    model_rmse: float | None = None
+    model_mae: float | None = None
+    model_r2: float | None = None
+    model_accuracy: float | None = None
+    ensemble_size: int | None = None

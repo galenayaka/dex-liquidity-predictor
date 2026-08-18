@@ -12,5 +12,10 @@
     "gpr"
   ],
   "target_type": "regression",
-  "ticker": "btc"
+  "ticker": "btc",
+  "metrics": {
+    "mae": 2880.8997504149497,
+    "rmse": 3482.069495295882,
+    "r2": 0.9213639224735622
+  }
 }
