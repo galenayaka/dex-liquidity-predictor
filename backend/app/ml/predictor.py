@@ -63,6 +63,17 @@ class DrainPredictor:
         liquidity_change_pct: float | None,
         price_impact_pct: float | None,
     ) -> float:
+        """Transparent rule-based drain score (used when no model is trained).
+
+        The score is built additively from domain heuristics, each bucket
+        contributing a fixed weight, and is capped at 0.95 (never certain):
+          - deeper liquidity drains        -> +0.50 / +0.35 / +0.15
+          - larger reference price impact  -> +0.30 / +0.20 / +0.10
+          - more pending mempool swaps     -> +0.10 / +0.05
+          - elevated 5-minute volatility   -> +0.05
+        Feature indices 4 and 7 reference `ml.features.FEATURE_NAMES`
+        (pending_swaps and price_volatility_5m respectively).
+        """
         # Feature order is defined in `ml.features.FEATURE_NAMES`.
         score = 0.0
 

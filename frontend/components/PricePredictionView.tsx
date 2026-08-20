@@ -1,3 +1,15 @@
+/**
+ * PricePredictionView — the crypto price-forecast UI.
+ *
+ * Talks to the `crypto-forecast` service (:8100):
+ *   - GET /snapshot          -> live price tiles
+ *   - GET /latest/{ticker}   -> prefill the 10 feature inputs with today's data
+ *   - GET /predict/{ticker}  -> predict from the latest row
+ *   - POST /predict/{ticker} -> predict from a manually entered feature snapshot
+ *
+ * Also renders a "how the math works" explainer documenting the quantile
+ * XGBoost formulas used by the backend model.
+ */
 "use client";
 
 import { useEffect, useState } from "react";

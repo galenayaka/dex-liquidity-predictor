@@ -13,6 +13,7 @@ import time
 
 from ..core.config import get_settings
 from ..core.container import (
+    get_market_maker_bot,
     get_mempool_watcher,
     get_pool_provider,
     get_predictor,
@@ -30,6 +31,13 @@ _REFERENCE_TRADE_USD = 100_000.0
 
 
 def _pct_change(history: list[PoolSnapshot], seconds_ago: int, current_liquidity: int) -> float | None:
+    """Relative liquidity change vs the snapshot from `seconds_ago`.
+
+    Walks the history backwards to find the newest snapshot at or before
+    `now - seconds_ago`. If none is old enough, it falls back to the oldest
+    available snapshot so short histories still produce a number. Returns
+    None when there is no baseline or the baseline liquidity is zero.
+    """
     cutoff = time.time() - seconds_ago
     baseline: PoolSnapshot | None = None
     for snap in reversed(history):
@@ -45,6 +53,11 @@ def _pct_change(history: list[PoolSnapshot], seconds_ago: int, current_liquidity
 
 
 def _volatility(history: list[PoolSnapshot]) -> float:
+    """Population standard deviation of period-over-period price returns.
+
+    Uses the price series of the pool snapshots (>= 3 points required) to
+    produce a simple 5-minute volatility proxy for the ML features.
+    """
     prices = [s.pool.price for s in history if s.pool.price and s.pool.price > 0]
     if len(prices) < 3:
         return 0.0
@@ -66,6 +79,7 @@ class MonitorService:
         self._store = get_store()
         self._ws = get_ws_manager()
         self._watcher = get_mempool_watcher()
+        self._market_maker = get_market_maker_bot()
 
     async def run(self) -> None:
         logger.info(
@@ -136,6 +150,13 @@ class MonitorService:
             )
             self._store.add(snapshot)
             self._store.set_prediction(address, prediction)
+
+            # Feed the signal into the execution layer (simulated AMM bot).
+            action = await self._market_maker.evaluate_signal(prediction, pool.price)
+            if action is not None:
+                await self._ws.broadcast(
+                    {"type": "bot", "data": self._market_maker.state()}
+                )
 
             if prediction.alert_level in {"HIGH", "CRITICAL"}:
                 alert = Alert(

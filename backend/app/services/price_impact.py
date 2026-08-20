@@ -18,8 +18,21 @@ STABLES = {"USDC", "USDT", "DAI", "BUSD", "TUSD", "FRAX", "GUSD", "USD"}
 # --------------------------------------------------------------------------- #
 # Pure math helpers
 # --------------------------------------------------------------------------- #
+#
+# Uniswap v3 keeps liquidity `L = sqrt(x * y)` constant within a tick range,
+# where x = amount(token0), y = amount(token1), and the price is P = y / x.
+# The on-chain state stores the *square root* of the price scaled by 2^96
+# (Q64.96 fixed point):  sqrtPriceX96 = sqrt(P) * 2^96.
+#
+# From x * y = L^2 and P = y / x we get the useful identities:
+#   x = L / sqrt(P)          y = L * sqrt(P)          sqrt(P) = y / L = L / x
+# The formulas below are these identities rewritten in X96 integer units.
 def sqrt_price_x96_to_raw_price(sqrt_price_x96: int) -> float:
-    """Raw price = amount(token1) per amount(token0), both in raw units."""
+    """Raw price = amount(token1) per amount(token0), both in raw units.
+
+    Because price P = (sqrt(P))^2 and sqrt(P) = sqrtPriceX96 / 2^96:
+    P = (sqrtPriceX96 / 2^96)^2.
+    """
     return (sqrt_price_x96 / Q96) ** 2
 
 
@@ -32,7 +45,14 @@ def human_price(sqrt_price_x96: int, decimals0: int, decimals1: int) -> float:
 def get_next_sqrt_price_zero_for_one(
     sqrt_price_x96: int, liquidity: int, amount0_in: int
 ) -> int:
-    """Exact-input swap token0 -> token1; price moves down."""
+    """Exact-input swap token0 -> token1; price moves down.
+
+    After adding `amount0_in` units of token0, x' = x + dx and (because
+    x' * y' = L^2) the new price is sqrt(P') = L / x' = L / (x + dx).
+    Substituting x = L / sqrt(P) and multiplying through by 2^96:
+
+        sqrtP'_X96 = sqrtP_X96 * L * Q96 / (L * Q96 + dx * sqrtP_X96)
+    """
     if sqrt_price_x96 <= 0 or liquidity <= 0 or amount0_in <= 0:
         raise ValueError("sqrt_price_x96, liquidity and amount0_in must be positive")
     numerator = sqrt_price_x96 * liquidity * Q96
@@ -43,14 +63,29 @@ def get_next_sqrt_price_zero_for_one(
 def get_next_sqrt_price_one_for_zero(
     sqrt_price_x96: int, liquidity: int, amount1_in: int
 ) -> int:
-    """Exact-input swap token1 -> token0; price moves up."""
+    """Exact-input swap token1 -> token0; price moves up.
+
+    After adding `amount1_in` units of token1, y' = y + dy and (because
+    x' * y' = L^2) the new price is sqrt(P') = y' / L = (y + dy) / L.
+    Substituting y = L * sqrt(P) and multiplying through by 2^96:
+
+        sqrtP'_X96 = sqrtP_X96 + (dy * Q96) / L
+    """
     if sqrt_price_x96 <= 0 or liquidity <= 0 or amount1_in <= 0:
         raise ValueError("sqrt_price_x96, liquidity and amount1_in must be positive")
     return sqrt_price_x96 + (amount1_in * Q96) // liquidity
 
 
 def get_amount0_out(sqrt_price_old: int, sqrt_price_new: int, liquidity: int) -> int:
-    """token0 out for a price increase (token1 -> token0)."""
+    """token0 out for a price increase (token1 -> token0).
+
+    token0 reserves move from x = L / sqrt(P_old) to x' = L / sqrt(P_new),
+    so the trader receives:
+
+        dx = L * (sqrt(P_new) - sqrt(P_old)) / (sqrt(P_old) * sqrt(P_new))
+
+    In X96 units: dx = L * Q96 * (sp_new - sp_old) / (sp_old * sp_new).
+    """
     if sqrt_price_new <= sqrt_price_old:
         return 0
     return (
@@ -59,7 +94,15 @@ def get_amount0_out(sqrt_price_old: int, sqrt_price_new: int, liquidity: int) ->
 
 
 def get_amount1_out(sqrt_price_old: int, sqrt_price_new: int, liquidity: int) -> int:
-    """token1 out for a price decrease (token0 -> token1)."""
+    """token1 out for a price decrease (token0 -> token1).
+
+    token1 reserves move from y = L * sqrt(P_old) to y' = L * sqrt(P_new),
+    so the trader receives:
+
+        dy = L * (sqrt(P_old) - sqrt(P_new))
+
+    In X96 units: dy = L * (sp_old - sp_new) / Q96.
+    """
     if sqrt_price_old <= sqrt_price_new:
         return 0
     return (liquidity * (sqrt_price_old - sqrt_price_new)) // Q96

@@ -1,3 +1,11 @@
+/**
+ * LiquidityChart — TradingView lightweight-charts area chart.
+ *
+ * The chart is created once on mount and updated imperatively via
+ * `series.update()` (only new points are pushed), so React does not re-render
+ * on every tick. A ResizeObserver keeps the width in sync, and the theme
+ * effect re-reads CSS variables to restyle the chart when the accent changes.
+ */
 "use client";
 
 import { useEffect, useRef } from "react";

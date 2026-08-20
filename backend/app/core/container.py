@@ -10,6 +10,7 @@ from functools import lru_cache
 from .config import get_settings
 from ..ml.predictor import DrainPredictor
 from ..services.liquidity_predictor import LiquidityPredictor
+from ..services.market_maker import MarketMakerBot
 from ..services.mempool import MempoolWatcher
 from ..services.pool_provider import build_pool_provider
 from ..services.price_impact import PriceImpactService
@@ -60,7 +61,15 @@ def get_liquidity_predictor() -> LiquidityPredictor:
 
 
 @lru_cache
+def get_market_maker_bot() -> MarketMakerBot:
+    return MarketMakerBot(get_settings())
+
+
+@lru_cache
 def get_event_listener() -> UniswapV3EventListener:
     return UniswapV3EventListener(
-        get_settings(), get_ws_manager(), get_liquidity_predictor()
+        get_settings(),
+        get_ws_manager(),
+        get_liquidity_predictor(),
+        get_market_maker_bot(),
     )

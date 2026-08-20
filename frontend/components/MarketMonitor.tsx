@@ -1,3 +1,10 @@
+/**
+ * MarketMonitor — compact ticker table for the sidebar.
+ *
+ * Polls the forecast service's GET /snapshot every 30 seconds (with an 8 s
+ * abort timeout) and shows each coin's price and 24 h change, plus a one-click
+ * "predict" action that forwards the ticker to the dashboard.
+ */
 "use client";
 
 import { useEffect, useState } from "react";

@@ -1,3 +1,14 @@
+/**
+ * CommandLine — terminal-style command input along the bottom edge.
+ *
+ * Supported commands (case-insensitive):
+ *   PRED <ticker>  run a price prediction for btc/eth/sol/bnb/xrp
+ *   TICKERS        list valid tickers
+ *   HELP           show usage
+ *   CLEAR          wipe the output
+ *
+ * Keeps the last 5 output lines; forwards prediction requests via `onPredict`.
+ */
 "use client";
 
 import { useState } from "react";

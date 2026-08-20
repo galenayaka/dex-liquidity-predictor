@@ -71,6 +71,25 @@ class Settings(BaseSettings):
         {"address": "0x4e68Ccd3E89f51C3074ca5072bbAC773960dFa36", "token0": "WETH", "token1": "USDT", "fee": 3000, "price": 3000.0},
     ]
 
+    # --- Market maker (simulated execution layer) ----------------------- #
+    # When True, provide/withdraw only print logs (no real transactions).
+    simulation_mode: bool = True
+    # Uniswap v3 tick spacing of the traded pool (60 = 0.3% fee tier).
+    market_maker_tick_spacing: int = 60
+    # Max number of tick-spacing steps the position range can widen per side.
+    market_maker_max_range_steps: int = 10
+    # Token decimals of the traded pool (USDC/WETH by default). Used to convert
+    # the human price into Uniswap's raw-price tick convention.
+    market_maker_token0_decimals: int = 6
+    market_maker_token1_decimals: int = 18
+    # Notional (human units) to deposit when opening a simulated position.
+    market_maker_amount0: float = 1000.0
+    market_maker_amount1: float = 0.3
+    # Signer for REAL transactions (only used when simulation_mode=False).
+    # Keep empty in development — the bot is read-only by default.
+    wallet_private_key: str | None = None
+    wallet_address: str | None = None
+
     @field_validator("cors_origins", mode="before")
     @classmethod
     def _split_cors_origins(cls, value: Any) -> Any:

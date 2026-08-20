@@ -69,4 +69,25 @@ export interface LiquidityPoint {
   value: number;
 }
 
-export type WSMessage = EventMessage | AlertMessage | SnapshotMessage;
+/** Current state of the market-maker bot's (simulated) liquidity position. */
+export interface MarketMakerState {
+  has_active_position: boolean;
+  tick_lower: number;
+  tick_upper: number;
+  liquidity: number;
+  token_id?: number | null;
+  simulation_mode: boolean;
+  tick_spacing: number;
+}
+
+/** Broadcast whenever the bot opens or closes a position (`type: "bot"`). */
+export interface BotMessage {
+  type: "bot";
+  data: MarketMakerState;
+}
+
+export type WSMessage =
+  | EventMessage
+  | AlertMessage
+  | SnapshotMessage
+  | BotMessage;

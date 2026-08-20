@@ -1,3 +1,15 @@
+/**
+ * Dashboard — the single-page root of the terminal UI.
+ *
+ * Subscribes to the backend WebSocket via `useWebSocket` and derives, with
+ * `useMemo`, three streams from the message buffer:
+ *   - pools   (newest `snapshot`)
+ *   - events  (`event` frames, i.e. Swap/Burn + prediction)
+ *   - alerts  (`alert` frames from the monitor loop)
+ *
+ * A `view` state swaps the main content area; `predictRequest` forwards a
+ * ticker to the Price Prediction view (from the sidebar or command line).
+ */
 "use client";
 
 import { useMemo, useState } from "react";
@@ -14,10 +26,12 @@ import PricePredictionView from "@/components/PricePredictionView";
 import SettingsView from "@/components/SettingsView";
 import Sidebar, { type View } from "@/components/Sidebar";
 import { useWebSocket } from "@/hooks/useWebSocket";
+import MarketMakerPanel from "@/components/MarketMakerPanel";
 import type {
   AlertMessage,
   EventMessage,
   LiquidityPoint,
+  MarketMakerState,
   PoolState,
 } from "@/lib/types";
 
@@ -41,6 +55,10 @@ const VIEW_TITLES: Record<View, { title: string; subtitle: string }> = {
   alerts: {
     title: "Alerts",
     subtitle: "High-risk liquidity alerts and warnings",
+  },
+  bot: {
+    title: "Market Maker",
+    subtitle: "Simulated Uniswap v3 liquidity execution",
   },
   settings: {
     title: "Settings",
@@ -108,6 +126,14 @@ export default function Dashboard() {
       points.push({ time, value: value / 1e18 });
     }
     return points;
+  }, [messages]);
+
+  const botState = useMemo<MarketMakerState | null>(() => {
+    for (let i = messages.length - 1; i >= 0; i--) {
+      const message = messages[i];
+      if (message.type === "bot") return message.data;
+    }
+    return null;
   }, [messages]);
 
   const heading = VIEW_TITLES[view];
@@ -184,6 +210,8 @@ export default function Dashboard() {
                 <PredictionPanel event={latestEvent} alert={latestAlert} />
               </div>
 
+              <MarketMakerPanel live={botState} />
+
               <LiquidityChart data={liquiditySeries} />
 
               <Explain title="Why liquidity movements matter">
@@ -201,6 +229,21 @@ export default function Dashboard() {
             <PricePredictionView command={predictRequest} />
           )}
           {view === "alerts" && <AlertsView alerts={alerts} events={events} />}
+          {view === "bot" && (
+            <>
+              <Explain title="How the execution layer works" open>
+                <p>
+                  The <b>Market Maker Bot</b> turns predictions into actions.
+                  When the model flags a pool as HIGH or CRITICAL risk, the bot
+                  withdraws its simulated position to protect against impermanent
+                  loss. When risk returns to LOW, it re-enters with a
+                  concentrated range whose width scales with the predicted price
+                  impact.
+                </p>
+              </Explain>
+              <MarketMakerPanel live={botState} />
+            </>
+          )}
           {view === "settings" && <SettingsView status={status} />}
           </div>
         </main>

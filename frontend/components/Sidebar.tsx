@@ -9,6 +9,7 @@ export type View =
   | "predictions"
   | "price"
   | "alerts"
+  | "bot"
   | "settings";
 
 const NAV_ITEMS: { key: View; label: string }[] = [
@@ -17,6 +18,7 @@ const NAV_ITEMS: { key: View; label: string }[] = [
   { key: "predictions", label: "Predictions" },
   { key: "price", label: "Price Prediction" },
   { key: "alerts", label: "Alerts" },
+  { key: "bot", label: "Market Maker" },
   { key: "settings", label: "Settings" },
 ];
 

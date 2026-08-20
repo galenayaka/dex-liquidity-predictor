@@ -20,6 +20,7 @@ from web3 import AsyncWeb3, Web3
 from ..core.config import Settings
 from ..db.crud import save_metrics_to_db
 from ..services.liquidity_predictor import LiquidityPredictor
+from ..services.market_maker import MarketMakerBot
 from ..websocket.manager import ConnectionManager
 
 logger = logging.getLogger(__name__)
@@ -98,15 +99,20 @@ class UniswapV3EventListener:
         settings: Settings,
         ws_manager: ConnectionManager,
         predictor: LiquidityPredictor,
+        market_maker: MarketMakerBot,
     ) -> None:
         self._settings = settings
         self._ws = ws_manager
         self._predictor = predictor
+        self._market_maker = market_maker
         self._stop = asyncio.Event()
         # Notional USD depth, updated on each Swap and reused for Burn events.
         self._last_depth_usd: float = 50_000_000.0
         # Last implied WETH-side reserve (token B), reused for Burn events.
         self._last_token_b_reserve: float | None = None
+        # Last human price of token0 (USDC) in token1 (WETH). Burn logs carry
+        # no sqrtPriceX96, so we reuse the most recent Swap price.
+        self._last_price: float = 0.0003
         # Cached gas price (wei) to avoid an RPC round-trip per event.
         self._gas_price: int = 0
         self._gas_price_ts: float = 0.0
@@ -119,6 +125,21 @@ class UniswapV3EventListener:
             await self._run_mock()
         else:
             await self._run_onchain()
+
+    def _derive_price(self, args: dict[str, Any]) -> float:
+        """Human price of token0 (USDC) denominated in token1 (WETH).
+
+        Burn logs carry no sqrtPriceX96, so we fall back to the last price
+        observed on a Swap (initialised to the pool's approximate price) so the
+        market maker keeps anchoring its range to a sane tick.
+        """
+        sqrt_price_x96 = _as_int(args.get("sqrtPriceX96", 0))
+        if sqrt_price_x96 <= 0:
+            return self._last_price
+        sqrt_raw = sqrt_price_x96 / _Q96
+        price = (sqrt_raw**2) * (10 ** (6 - 18))
+        self._last_price = price
+        return price
 
     # ------------------------------------------------------------------ #
     # On-chain (real) listener
@@ -184,6 +205,13 @@ class UniswapV3EventListener:
         result = self._run_prediction(event_name, args, self._gas_price)
         self._save_metric(result)
         await self._broadcast_event(event_name, log, args, result["prediction"])
+        action = await self._market_maker.evaluate_signal(
+            result["prediction"], self._derive_price(args)
+        )
+        if action is not None:
+            await self._ws.broadcast(
+                {"type": "bot", "data": self._market_maker.state()}
+            )
 
     async def _broadcast_event(
         self,
@@ -322,6 +350,13 @@ class UniswapV3EventListener:
             result = self._run_prediction(kind, args, gas_price)
             self._save_metric(result)
             await self._broadcast_event(kind, log, args, result["prediction"])
+            action = await self._market_maker.evaluate_signal(
+                result["prediction"], self._derive_price(args)
+            )
+            if action is not None:
+                await self._ws.broadcast(
+                    {"type": "bot", "data": self._market_maker.state()}
+                )
 
     @staticmethod
     def _fake_address(rng: random.Random) -> str:
