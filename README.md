@@ -284,7 +284,16 @@ $$\text{IL} = \text{hodl} \cdot \left(1 - \frac{2\sqrt{r}}{1 + r}\right)$$
 - `calculate_sharpe_ratio(risk_free_rate=0.0)` — annualised Sharpe ratio over
   the recorded `portfolio_history`, using period-over-period percentage
   returns. Returns `0.0` when there aren't at least two returns or the return
-  volatility is zero.
+  volatility is zero. The formula used is:
+
+$$\text{Sharpe Ratio} = \frac{R_p - R_f}{\sigma_p}$$
+
+  **where:**
+
+  - $R_p$ = return of the portfolio
+  - $R_f$ = risk-free rate
+  - $\sigma_p$ = standard deviation of the portfolio's excess return
+
 - `record_portfolio_value()` — appends `{timestamp, net_portfolio_value}` on
   every evaluation (monitor scan or streamed Swap/Burn event), accruing a small
   simulated trading fee while a position is open.
