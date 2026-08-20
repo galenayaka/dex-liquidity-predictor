@@ -22,7 +22,10 @@ from __future__ import annotations
 
 import logging
 import math
+import time
 from typing import Any
+
+import numpy as np
 
 from ..core.config import Settings
 
@@ -31,6 +34,14 @@ logger = logging.getLogger(__name__)
 # Uniswap v3 encodes price as `price = 1.0001 ** tick`, therefore:
 #   tick = ln(price) / ln(1.0001)
 _TICK_BASE = 1.0001
+
+# Fallback human price of token0 (USDC) denominated in token1 (WETH), used when
+# no market price has been observed yet (~1 USDC = 0.0003 WETH).
+_FALLBACK_PRICE = 0.0003
+
+# Simulated trading-fee accrual (USD) per evaluation while a position is open.
+# Kept small so portfolio growth is dominated by price moves, not fee drift.
+_SIMULATED_FEE_PER_EVAL = 0.01
 
 # --------------------------------------------------------------------------- #
 # Minimal Uniswap v3 NonfungiblePositionManager ABI fragments.
@@ -141,12 +152,21 @@ class MarketMakerBot:
         self.position_liquidity: int = 0
         self.token_id: int | None = None
 
+        # --- Simulated financial tracking ------------------------------- #
+        self._amount0 = settings.market_maker_amount0
+        self._amount1 = settings.market_maker_amount1
+        self.entry_price: float | None = None  # price when the position opened
+        self.accumulated_fees: float = 0.0    # simulated trading fees (USD)
+        self.portfolio_history: list[dict[str, Any]] = []
+        self._last_price: float | None = None  # most recent market price seen
+
         # Contract + pool addresses used when building real transactions.
         self._position_manager = settings.uniswap_v3_position_manager
         self._pool = settings.uniswap_v3_pool_eth_usdc
 
     def state(self) -> dict[str, Any]:
         """Snapshot of the current (simulated) position for the API / UI."""
+        current_price = self._last_price
         return {
             "has_active_position": self.has_active_position,
             "tick_lower": self.current_tick_lower,
@@ -155,7 +175,144 @@ class MarketMakerBot:
             "token_id": self.token_id,
             "simulation_mode": self.simulation_mode,
             "tick_spacing": self.tick_spacing,
+            "accumulated_fees": self.accumulated_fees,
+            "current_impermanent_loss": self.calculate_impermanent_loss(
+                current_price
+            ),
+            "net_portfolio_value": self.calculate_portfolio_value(current_price),
+            "sharpe_ratio": self.calculate_sharpe_ratio(),
         }
+
+    # ------------------------------------------------------------------ #
+    # Financial performance tracking (simulated P&L)
+    # ------------------------------------------------------------------ #
+    def _effective_price(self, current_price: float | None) -> float:
+        """Resolve a usable token0/token1 price from the best source available."""
+        for candidate in (current_price, self._last_price, self.entry_price):
+            if candidate is not None and candidate > 0:
+                return float(candidate)
+        return _FALLBACK_PRICE
+
+    def _hodl_value(self, price: float) -> float:
+        """USD value of the deposited assets if simply held at `price`.
+
+        `price` is token0 (USDC) denominated in token1 (WETH). token0 is the
+        stablecoin worth $1, so the holding is worth
+            amount0 + amount1 / price   (amount1 WETH * USD-per-WETH).
+        """
+        if price <= 0:
+            return float(self._amount0)
+        return float(self._amount0 + self._amount1 / price)
+
+    def calculate_impermanent_loss(self, current_price: float | None) -> float:
+        """Simulated impermanent loss (USD) versus simply holding the deposit.
+
+        Uses the constant-product AMM formula: when the price moves by
+        ``r = current / entry``, an LP position retains ``2*sqrt(r)/(1+r)``
+        of the "hodl" value, so the loss is
+        ``hodl * (1 - 2*sqrt(r)/(1+r))``. Returns 0 when there is no open
+        position or either price is unavailable.
+        """
+        if (
+            not self.has_active_position
+            or not self.entry_price
+            or self.entry_price <= 0
+        ):
+            return 0.0
+        price = self._effective_price(current_price)
+        if price <= 0:
+            return 0.0
+        ratio = price / self.entry_price
+        hodl = self._hodl_value(price)
+        lp_ratio = 2.0 * math.sqrt(ratio) / (1.0 + ratio)
+        return max(0.0, hodl * (1.0 - lp_ratio))
+
+    def calculate_portfolio_value(self, current_price: float | None) -> float:
+        """Simulated net value of the bot's position (USD).
+
+        Equals the current value of the deposited assets ("hodl" baseline)
+        plus accumulated trading fees, minus any impermanent loss incurred
+        since the position was opened.
+        """
+        price = self._effective_price(current_price)
+        return (
+            self._hodl_value(price)
+            + self.accumulated_fees
+            - self.calculate_impermanent_loss(price)
+        )
+
+    def record_portfolio_value(self, current_price: float | None) -> None:
+        """Append a (timestamp, net value) snapshot to ``portfolio_history``.
+
+        Called on every evaluation (monitor scan or streamed event). Simulated
+        trading fees accrue while a position is open.
+        """
+        if self.has_active_position:
+            self.accumulated_fees += _SIMULATED_FEE_PER_EVAL
+        self.portfolio_history.append(
+            {
+                "timestamp": time.time(),
+                "net_portfolio_value": self.calculate_portfolio_value(
+                    current_price
+                ),
+            }
+        )
+
+    def _periods_per_year(self) -> float:
+        """Estimate samples-per-year from the recorded snapshot timestamps."""
+        seconds_per_year = 365.25 * 86400.0
+        timestamps = [
+            float(p["timestamp"])
+            for p in self.portfolio_history
+            if isinstance(p.get("timestamp"), (int, float))
+            and p["timestamp"] > 0
+        ]
+        if len(timestamps) >= 2 and timestamps[-1] > timestamps[0]:
+            avg_seconds = (timestamps[-1] - timestamps[0]) / (
+                len(timestamps) - 1
+            )
+            if avg_seconds > 0:
+                return seconds_per_year / avg_seconds
+        return seconds_per_year / max(self._settings.scan_interval_seconds, 1)
+
+    def calculate_sharpe_ratio(self, risk_free_rate: float = 0.0) -> float:
+        """Annualised Sharpe ratio of the recorded portfolio value series.
+
+        Computes period-over-period percentage returns, then annualises using
+        the average inter-sample interval. Returns ``0.0`` when there is not
+        enough history (fewer than two returns) or the return volatility is
+        zero.
+        """
+        if len(self.portfolio_history) < 3:
+            return 0.0
+
+        values = [
+            float(p["net_portfolio_value"]) for p in self.portfolio_history
+        ]
+        returns = [
+            (values[i] - values[i - 1]) / values[i - 1]
+            for i in range(1, len(values))
+            if values[i - 1] != 0.0
+        ]
+        if len(returns) < 2:
+            return 0.0
+
+        arr = np.asarray(returns, dtype=float)
+        mean_return = float(np.mean(arr))
+        std_return = float(np.std(arr, ddof=1))
+        if std_return == 0.0 or not math.isfinite(std_return):
+            return 0.0
+
+        periods_per_year = self._periods_per_year()
+        risk_free_per_period = risk_free_rate / periods_per_year
+        sharpe = (
+            (mean_return - risk_free_per_period)
+            / std_return
+            * math.sqrt(periods_per_year)
+        )
+        if not math.isfinite(sharpe):
+            return 0.0
+        return float(sharpe)
 
     # ------------------------------------------------------------------ #
     # Signal evaluation (the reactive policy)
@@ -174,6 +331,12 @@ class MarketMakerBot:
         Returns:
             The action taken (or ``None`` when the policy holds the position).
         """
+        # Record the latest market price and append a portfolio snapshot on
+        # every evaluation (monitor scan or streamed event).
+        if current_price and current_price > 0:
+            self._last_price = float(current_price)
+        self.record_portfolio_value(current_price)
+
         risk_level, price_impact = self._extract_signal(prediction)
         logger.info(
             "MarketMakerBot evaluating risk=%s impact=%.4f%% active=%s",
@@ -262,6 +425,10 @@ class MarketMakerBot:
         self, current_price: float, predicted_price_impact: float | None = None
     ) -> dict[str, Any]:
         """Open a liquidity position (simulated Mint, or real txn if enabled)."""
+        if current_price and current_price > 0:
+            self._last_price = float(current_price)
+            self.entry_price = float(current_price)
+
         tick_lower, tick_upper = self.calculate_optimal_ticks(
             current_price, predicted_price_impact
         )
@@ -303,6 +470,7 @@ class MarketMakerBot:
             self.current_tick_upper = 0
             self.position_liquidity = 0
             self.token_id = None
+            self.entry_price = None
             logger.info(
                 "[SIMULATION] Burn liquidity in range [%s, %s] (%s)",
                 tick_lower,
@@ -429,6 +597,7 @@ class MarketMakerBot:
         self.has_active_position = False
         self.current_tick_lower = 0
         self.current_tick_upper = 0
+        self.entry_price = None
         return {
             "action": "withdraw_liquidity",
             "simulated": False,

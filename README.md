@@ -205,7 +205,7 @@ risk signal**.
 | `app/services/mempool.py`                     | Watches pending swap transactions, decodes selectors                          |
 | `app/services/uniswap_events.py`              | Async Swap/Burn listener; decodes, predicts, broadcasts                        |
 | `app/services/liquidity_predictor.py`         | Event-stream inference (`.pkl` model or deterministic mock)                    |
-| `app/services/market_maker.py`                | Simulated AMM execution layer that reacts to predictions                       |
+| `app/services/market_maker.py`                | Simulated AMM execution layer + financial metrics (Sharpe)                    |
 | `app/services/store.py`                       | Thread-safe in-memory snapshot store                                          |
 | `app/tasks/monitor.py`                        | Periodic scan loop (analytics + alerts)                                        |
 | `app/websocket/manager.py`                    | Fan-out WebSocket connection manager                                           |
@@ -266,6 +266,31 @@ when predicted price impact is high (more volatility) and narrows it when low
 (more concentrated). Real transactions are only built behind `SIMULATION_MODE`
 (default on, logs only). State is exposed via `GET /api/v1/market-maker/status`
 and pushed to the dashboard as a `bot` WebSocket frame.
+
+#### Simulated financial performance
+
+The bot also tracks a **simulated** P&L so the execution layer can be judged
+quantitatively, not just by its open/closed state:
+
+- `calculate_portfolio_value(current_price)` — net position value (USD), equal
+  to the held assets' current value plus `accumulated_fees` minus any
+  impermanent loss. Prices are token0 (USDC) denominated in token1 (WETH), so
+  the USD value of the WETH leg is `amount1 / price`.
+- `calculate_impermanent_loss(current_price)` — constant-product AMM loss
+  versus simply holding, with `r = current / entry`:
+
+$$\text{IL} = \text{hodl} \cdot \left(1 - \frac{2\sqrt{r}}{1 + r}\right)$$
+
+- `calculate_sharpe_ratio(risk_free_rate=0.0)` — annualised Sharpe ratio over
+  the recorded `portfolio_history`, using period-over-period percentage
+  returns. Returns `0.0` when there aren't at least two returns or the return
+  volatility is zero.
+- `record_portfolio_value()` — appends `{timestamp, net_portfolio_value}` on
+  every evaluation (monitor scan or streamed Swap/Burn event), accruing a small
+  simulated trading fee while a position is open.
+
+`GET /api/v1/market-maker/status` exposes all of these as `accumulated_fees`,
+`current_impermanent_loss`, `net_portfolio_value`, and `sharpe_ratio`.
 
 ---
 
@@ -463,7 +488,7 @@ messages are ignored).
 | GET    | `/predictions/{address}`           | — (rate-limited)                 | `PredictionResponse{prediction: DrainPrediction}`    |
 | GET    | `/metrics/{pool_address}`          | `time_range` (`1h\|24h\|7d`)     | `[MetricPoint{time, value}]` ascending               |
 | POST   | `/users/register`                  | `UserCreate`                     | `UserResponse` (201) / 409                           |
-| GET    | `/market-maker/status`             | —                                | `MarketMakerStatus` (bot position state)             |
+| GET    | `/market-maker/status`             | —                                | `MarketMakerStatus` (position + financial metrics)   |
 
 ### Forecast (`:8100`)
 

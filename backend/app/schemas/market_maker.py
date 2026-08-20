@@ -14,3 +14,7 @@ class MarketMakerStatus(BaseModel):
     token_id: int | None = None
     simulation_mode: bool
     tick_spacing: int
+    accumulated_fees: float = 0.0
+    current_impermanent_loss: float = 0.0
+    net_portfolio_value: float = 0.0
+    sharpe_ratio: float = 0.0

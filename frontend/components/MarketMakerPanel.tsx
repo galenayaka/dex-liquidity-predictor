@@ -91,6 +91,27 @@ export default function MarketMakerPanel({
           <Row label="Tick spacing">{state.tick_spacing}</Row>
           <Row label="Liquidity">{state.liquidity.toLocaleString()}</Row>
           <Row label="Token ID">{state.token_id ?? "—"}</Row>
+          <Row label="Net portfolio value">
+            ${(state.net_portfolio_value ?? 0).toLocaleString(undefined, {
+              minimumFractionDigits: 2,
+              maximumFractionDigits: 2,
+            })}
+          </Row>
+          <Row label="Accumulated fees">
+            ${(state.accumulated_fees ?? 0).toLocaleString(undefined, {
+              minimumFractionDigits: 2,
+              maximumFractionDigits: 2,
+            })}
+          </Row>
+          <Row label="Impermanent loss">
+            ${(state.current_impermanent_loss ?? 0).toLocaleString(undefined, {
+              minimumFractionDigits: 2,
+              maximumFractionDigits: 2,
+            })}
+          </Row>
+          <Row label="Sharpe ratio">
+            {(state.sharpe_ratio ?? 0).toFixed(3)}
+          </Row>
         </div>
       ) : (
         <p className="border-t border-noir-line px-3 py-2 text-[10px] uppercase tracking-wider text-noir-dim">

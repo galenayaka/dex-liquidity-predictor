@@ -78,6 +78,10 @@ export interface MarketMakerState {
   token_id?: number | null;
   simulation_mode: boolean;
   tick_spacing: number;
+  accumulated_fees?: number;
+  current_impermanent_loss?: number;
+  net_portfolio_value?: number;
+  sharpe_ratio?: number;
 }
 
 /** Broadcast whenever the bot opens or closes a position (`type: "bot"`). */
