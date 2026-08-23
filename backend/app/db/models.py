@@ -4,7 +4,18 @@ from __future__ import annotations
 import enum
 from datetime import datetime
 
-from sqlalchemy import Boolean, DateTime, Enum, Float, ForeignKey, Index, Integer, String, func
+from sqlalchemy import (
+    Boolean,
+    DateTime,
+    Enum,
+    Float,
+    ForeignKey,
+    Index,
+    Integer,
+    String,
+    func,
+    text,
+)
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from .database import Base
@@ -28,7 +39,8 @@ class User(Base):
     hashed_password: Mapped[str] = mapped_column(String(255), nullable=False)
     wallet_address: Mapped[str | None] = mapped_column(String(42), nullable=True)
     is_active: Mapped[bool] = mapped_column(
-        Boolean, nullable=False, default=True, server_default="true"
+        # MySQL BOOL is TINYINT(1); use a numeric literal for the server default.
+        Boolean, nullable=False, default=True, server_default=text("1")
     )
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, server_default=func.now()
@@ -63,14 +75,10 @@ class Subscription(Base):
 
 
 class LiquidityMetric(Base):
-    """Append-only liquidity / price-impact metric (TimescaleDB hypertable).
+    """Append-only liquidity / price-impact metric.
 
-    The composite primary key includes `time` so the table can be converted
-    into a TimescaleDB hypertable (the partition column must appear in every
-    unique index):
-
-        SELECT create_hypertable(
-            'liquidity_metrics', 'time', if_not_exists => TRUE);
+    The composite primary key (``time`` + ``pool_address``) keeps every sample
+    unique while supporting fast lookups for a pool over a time window.
     """
 
     __tablename__ = "liquidity_metrics"
@@ -78,7 +86,7 @@ class LiquidityMetric(Base):
         Index("ix_liquidity_metrics_pool_time", "pool_address", "time"),
     )
 
-    # Time axis (TimescaleDB partition column); part of the composite PK.
+    # Time axis; part of the composite PK.
     time: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), primary_key=True, nullable=False
     )

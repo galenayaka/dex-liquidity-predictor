@@ -30,9 +30,9 @@ class Settings(BaseSettings):
     ]
 
     # --- Database ------------------------------------------------------- #
-    # PostgreSQL connection URL for SQLAlchemy 2.0 (psycopg driver).
+    # MySQL connection URL for SQLAlchemy 2.0 (PyMySQL driver).
     database_url: str = (
-        "postgresql+psycopg://postgres:postgres@localhost:5432/dex_predictor"
+        "mysql+pymysql://root:@127.0.0.1:3306/dex_predictor"
     )
 
     # --- Web3 ----------------------------------------------------------- #

@@ -1,4 +1,4 @@
-"""SQLAlchemy 2.0 database connection configuration (PostgreSQL)."""
+"""SQLAlchemy 2.0 database connection configuration (MySQL)."""
 from __future__ import annotations
 
 import logging
@@ -14,7 +14,7 @@ logger = logging.getLogger(__name__)
 settings = get_settings()
 
 # `create_engine` is lazy: no connection is opened until first use, so the
-# application can still boot in mock mode without a running PostgreSQL.
+# application can still boot in mock mode without a running MySQL server.
 # `connect_timeout` makes `init_db()` fail fast when the database is offline
 # instead of blocking startup on a long TCP connect.
 engine = create_engine(
@@ -50,23 +50,3 @@ def init_db() -> None:
     from . import models  # noqa: F401
 
     Base.metadata.create_all(bind=engine)
-    _init_hypertable()
-
-
-def _init_hypertable() -> None:
-    """Convert liquidity_metrics into a TimescaleDB hypertable when available."""
-    from sqlalchemy import text
-
-    try:
-        with engine.begin() as conn:
-            conn.execute(
-                text(
-                    "SELECT create_hypertable("
-                    "'liquidity_metrics', 'time', if_not_exists => TRUE)"
-                )
-            )
-        logger.info("TimescaleDB hypertable ready for liquidity_metrics")
-    except Exception:  # noqa: BLE001 - extension may not be installed
-        logger.debug(
-            "TimescaleDB unavailable; liquidity_metrics stays a plain table"
-        )

@@ -95,7 +95,7 @@ flowchart LR
         MON[Monitor loop<br/>30s scan]
         P[DrainPredictor<br/>XGBoost / heuristic]
         S[Snapshot store]
-        DB[(PostgreSQL /<br/>TimescaleDB)]
+        DB[(MySQL)]
     end
 
     subgraph forecast[Forecast FastAPI :8100]
@@ -150,7 +150,7 @@ sequenceDiagram
    (over a WebSocket RPC in real mode, or a synthetic generator in mock mode).
 2. Every event is passed through a **liquidity predictor** that estimates the
    drain percentage and price impact, and assigns a risk level.
-3. The result is **saved** (best-effort, to PostgreSQL/TimescaleDB) and
+3. The result is **saved** (best-effort, to MySQL) and
    **broadcast** to every connected `/ws` client.
 4. In parallel, a **monitor loop** samples each watched pool every 30 seconds,
    computes liquidity-change and volatility features, runs the drain
@@ -195,7 +195,7 @@ risk signal**.
 | `app/api/router.py`, `app/api/deps.py`        | REST router aggregation + in-process rate limiter                              |
 | `app/api/routes/`                             | `health`, `pools`, `predictions`, `metrics`, `users` endpoints                 |
 | `app/schemas/`                                | Pydantic request/response models                                               |
-| `app/db/`                                     | SQLAlchemy models, schemas, session, CRUD (PostgreSQL/TimescaleDB)             |
+| `app/db/`                                     | SQLAlchemy models, schemas, session, CRUD (MySQL)             |
 | `app/ml/features.py`                          | Fixed-order feature vector for the classifier                                  |
 | `app/ml/model.py`                             | XGBoost classifier wrapper (train / save / load / predict)                     |
 | `app/ml/predictor.py`                         | Chooses XGBoost vs heuristic; maps probability → alert level + message         |
@@ -219,7 +219,7 @@ risk signal**.
    strings above `2^53` so JavaScript doesn't lose integer precision.
 3. **Predict** — `LiquidityPredictor` loads a serialized `.pkl` model when
    present, otherwise falls back to a deterministic mock inference.
-4. **Store** — `save_metrics_to_db` writes the metric to PostgreSQL
+4. **Store** — `save_metrics_to_db` writes the metric to MySQL
    (best-effort; the dashboard keeps working if the DB is offline).
 5. **Broadcast** — push the event + prediction to every `/ws` client.
 
@@ -656,8 +656,8 @@ round-trips, direction, magnitude, zero-liquidity guard).
   `NEXT_PUBLIC_WS_URL` is wrong. Check `ws://localhost:8000/ws`.
 - **Backend crashes on startup with `SettingsError: cors_origins`** — your
   `.env` has a comma-separated CORS list; use JSON (see section 12).
-- **Backend needs PostgreSQL?** — no. It starts fine without a database; DB
-  writes fail silently and the dashboard keeps working. TimescaleDB is only for
+- **Backend needs MySQL?** — no. It starts fine without a database; DB
+  writes fail silently and the dashboard keeps working. The database is only for
   persistence.
 - **`npm`/`npm.cmd` not recognized in an old terminal** — Node was installed
   after that terminal opened. Open a new terminal (or run `start-all.ps1`,

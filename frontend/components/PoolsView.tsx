@@ -90,7 +90,7 @@ export default function PoolsView({ pools }: { pools: PoolState[] }) {
 
         {error && (
           <p className="border-b border-noir-line bg-noir-panel2 px-2 py-1 text-xs text-noir-muted">
-            Historical data unavailable — start backend + PostgreSQL
+            Historical data unavailable — start backend + MySQL
           </p>
         )}
 

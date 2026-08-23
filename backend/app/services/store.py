@@ -1,7 +1,7 @@
 """In-memory store for pool snapshots and predictions.
 
 A lightweight thread-safe store keeps the backend dependency-free. Swap for a
-database (TimescaleDB/Postgres) when persistence is required.
+database (MySQL) when persistence is required.
 """
 from __future__ import annotations
 

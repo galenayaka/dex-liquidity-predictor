@@ -33,8 +33,8 @@ async def lifespan(app: FastAPI):
     try:
         init_db()
         logger.info("Database tables initialized")
-    except Exception:  # noqa: BLE001 - PostgreSQL may be offline in dev/mock mode
-        logger.warning("Skipped database initialization (PostgreSQL unreachable)")
+    except Exception:  # noqa: BLE001 - MySQL may be offline in dev/mock mode
+        logger.warning("Skipped database initialization (MySQL unreachable)")
 
     monitor = MonitorService()
     event_listener = get_event_listener()
