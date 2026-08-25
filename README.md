@@ -35,7 +35,6 @@ trading-bot backend.
 15. [Testing](#15-testing)
 16. [Common gotchas](#16-common-gotchas)
 17. [Glossary of concepts](#17-glossary-of-concepts)
-18. [Suggested thesis talking points](#18-suggested-thesis-talking-points)
 
 ---
 
@@ -693,28 +692,6 @@ round-trips, direction, magnitude, zero-liquidity guard).
   here with a chronological (non-shuffled) split and `shift(-1)` targets.
 - **WebSocket** — a persistent, bidirectional connection used to push real-time
   updates to the browser without polling.
-
----
-
-## 18. Suggested thesis talking points
-
-If you are using this project as a journal/thesis reference, here are angles the
-code directly supports:
-
-1. **Real-time risk monitoring for DeFi** — how raw blockchain events are
-   decoded, enriched with ML, and streamed to a client over WebSockets.
-2. **Uniswap v3 price-impact modeling** — exact integer arithmetic replicating
-   the core contracts (see `price_impact.py` and its unit tests).
-3. **Liquidity-drain prediction** — feature engineering from pool snapshots
-   (1m/5m/15m liquidity changes, volatility, mempool pressure) and an XGBoost
-   classifier with a transparent heuristic baseline.
-4. **Uncertainty-aware price forecasting** — quantile gradient boosting for a
-   95% prediction interval, with a chronological split to avoid look-ahead bias.
-5. **Multi-source data alignment** — merging 7-day crypto data with 5-day macro
-   series and forward-filling gaps (see `crypto-forecast/data_source.py`).
-6. **Graceful degradation** — every ML component has a deterministic fallback,
-   and every external dependency (node, database, model file) degrades instead
-   of crashing.
 
 ---
 
