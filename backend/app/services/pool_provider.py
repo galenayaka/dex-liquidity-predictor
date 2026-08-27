@@ -108,6 +108,8 @@ class MockPoolProvider(PoolProvider):
         self._rngs: dict[str, random.Random] = {}
         self._prices: dict[str, float] = {}
         self._liquidity: dict[str, int] = {}
+        self._base: dict[str, int] = {}
+        self._target_usd = 50_000_000.0
         self._seed()
 
     def _seed(self) -> None:
@@ -118,7 +120,9 @@ class MockPoolProvider(PoolProvider):
             self._tokens[key] = (t0, t1)
             self._rngs[key] = random.Random(entry["address"])
             self._prices[key] = float(entry.get("price", 1.0))
-            self._liquidity[key] = self._base_liquidity(entry)
+            base = self._base_liquidity(entry)
+            self._liquidity[key] = base
+            self._base[key] = base
 
     @staticmethod
     def _meta(symbol: str) -> TokenMeta:
@@ -172,6 +176,10 @@ class MockPoolProvider(PoolProvider):
         liquidity = max(int(liquidity), 1)
         self._liquidity[key] = liquidity
 
+        # USD value of both reserves, tracking the liquidity random walk.
+        base = self._base.get(key)
+        tvl_usd = (2 * self._target_usd * (liquidity / base)) if base else None
+
         raw_price = price / (10 ** (token0.decimals - token1.decimals))
         sqrt_price_x96 = int(math.sqrt(raw_price) * Q96) if raw_price > 0 else 0
         tick = int(round(math.log(raw_price) / math.log(1.0001))) if raw_price > 0 else 0
@@ -185,6 +193,7 @@ class MockPoolProvider(PoolProvider):
             sqrt_price_x96=sqrt_price_x96,
             tick=tick,
             price=price,
+            tvl_usd=tvl_usd,
             timestamp=int(time.time()),
         )
 

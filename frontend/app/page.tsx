@@ -103,7 +103,13 @@ export default function Dashboard() {
   );
 
   const lastUpdate = useMemo(() => {
-    if (!lastMessage || lastMessage.type === "snapshot") return null;
+    if (
+      !lastMessage ||
+      lastMessage.type === "snapshot" ||
+      lastMessage.type === "bot"
+    ) {
+      return null;
+    }
     return lastMessage.timestamp;
   }, [lastMessage]);
 

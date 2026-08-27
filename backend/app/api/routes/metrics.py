@@ -1,6 +1,7 @@
 """Historical liquidity metric endpoints."""
 from __future__ import annotations
 
+import time
 from datetime import datetime, timedelta, timezone
 from typing import Literal
 
@@ -10,7 +11,7 @@ from sqlalchemy import func, select
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
 
-from ...core.exceptions import AppError
+from ...core.container import get_store
 from ...db.database import get_db
 from ...db.models import LiquidityMetric
 
@@ -51,6 +52,10 @@ def get_metrics(
     most recent 100 rows, then reverses them so the response is ascending —
     the order `lightweight-charts` requires. `time_range` limits results to
     the last 1h / 24h / 7d.
+
+    When no persisted rows exist (mock mode, fresh install, or the database is
+    offline) the endpoint falls back to the in-memory snapshot history so the
+    dashboard keeps working end-to-end without MySQL.
     """
     query = select(LiquidityMetric).where(
         func.lower(LiquidityMetric.pool_address) == pool_address.lower()
@@ -60,22 +65,38 @@ def get_metrics(
         cutoff = datetime.now(timezone.utc) - _TIME_RANGES[time_range]
         query = query.where(LiquidityMetric.time >= cutoff)
 
+    rows: list[LiquidityMetric] = []
     try:
-        rows = db.scalars(
-            query.order_by(LiquidityMetric.time.desc()).limit(100)
-        ).all()
-    except SQLAlchemyError as exc:
-        raise AppError(
-            "Historical metrics are unavailable while the database is offline.",
-            status_code=503,
-            code="database_unavailable",
-        ) from exc
+        rows = list(
+            db.scalars(
+                query.order_by(LiquidityMetric.time.desc()).limit(100)
+            ).all()
+        )
+    except SQLAlchemyError:
+        rows = []
+
+    if rows:
+        return [
+            MetricPoint(time=_to_unix(row.time), value=row.token_a_reserve)
+            for row in reversed(rows)  # charts expect ascending time
+            if row.token_a_reserve is not None
+        ]
+
+    # Fallback: serve the live in-memory snapshot history.
+    snapshots = get_store().history(pool_address, limit=120)
+    if time_range is not None:
+        cutoff_ts = time.time() - _TIME_RANGES[time_range].total_seconds()
+        snapshots = [
+            s for s in snapshots
+            if s.pool.timestamp is not None and s.pool.timestamp >= cutoff_ts
+        ]
 
     points: list[MetricPoint] = []
-    for row in reversed(rows):  # charts expect ascending time
-        if row.token_a_reserve is None:
+    for snap in snapshots:
+        if snap.pool.tvl_usd is None or snap.pool.timestamp is None:
             continue
+        # `tvl_usd` covers both pool sides; a single reserve is ~half of it.
         points.append(
-            MetricPoint(time=_to_unix(row.time), value=row.token_a_reserve)
+            MetricPoint(time=snap.pool.timestamp, value=snap.pool.tvl_usd / 2.0)
         )
     return points

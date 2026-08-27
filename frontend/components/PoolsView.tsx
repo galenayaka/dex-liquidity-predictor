@@ -100,6 +100,7 @@ export default function PoolsView({ pools }: { pools: PoolState[] }) {
           </p>
         ) : (
           <LiquidityChart
+            key={activeAddress ?? "none"}
             data={points}
             title="Historical Liquidity"
             subtitle="Token A reserve (USD)"

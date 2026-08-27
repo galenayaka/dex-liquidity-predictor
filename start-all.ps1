@@ -59,26 +59,97 @@ foreach ($e in $envs) {
 Write-Host ""
 
 # ---------------------------------------------------------------------------
-# 2. Optional first-time setup (venvs + pip install + npm install)
+# 2. Python environment helpers (self-healing venv detection)
 # ---------------------------------------------------------------------------
-if ($Setup) {
+
+# Returns $true when $Python can import every module in $Modules.
+function Test-PythonModules {
+    param(
+        [string]$Python,
+        [string[]]$Modules
+    )
+    $modList = ($Modules | ForEach-Object { "'$_'" }) -join ", "
+    $code = "import importlib.util, sys; missing = [m for m in [$modList] if importlib.util.find_spec(m) is None]; sys.exit(1 if missing else 0)"
+    & $Python -c $code 2>$null | Out-Null
+    return ($LASTEXITCODE -eq 0)
+}
+
+# Creates a project venv (if needed), installs its requirements, and returns its python.
+function New-PythonEnv {
+    param([string]$Name)
+    $dir  = Join-Path $root $Name
+    $venv = Join-Path $dir ".venv"
+    $py   = Join-Path $venv "Scripts\python.exe"
+    $pip  = Join-Path $venv "Scripts\pip.exe"
+
     if (-not (Get-Command python -ErrorAction SilentlyContinue)) {
         Write-Host "ERROR: 'python' not found on PATH. Install Python 3.11+ first." -ForegroundColor Red
         exit 1
     }
-
-    foreach ($name in @("backend", "crypto-forecast")) {
-        $dir  = Join-Path $root $name
-        $venv = Join-Path $dir ".venv"
-        $py   = Join-Path $venv "Scripts\python.exe"
-        $pip  = Join-Path $venv "Scripts\pip.exe"
-
+    if (-not (Test-Path $py)) {
+        Write-Host "  creating virtualenv for $Name ..." -ForegroundColor Cyan
+        $out = python -m venv $venv 2>&1
+        $out | ForEach-Object { Write-Host $_ }
         if (-not (Test-Path $py)) {
-            Write-Host "  creating virtualenv in $name ..." -ForegroundColor Cyan
-            python -m venv $venv
+            Write-Host "ERROR: failed to create virtualenv for $Name." -ForegroundColor Red
+            exit 1
         }
-        Write-Host "  installing $name requirements (this can take a minute) ..." -ForegroundColor Cyan
-        & $pip install -r (Join-Path $dir "requirements.txt")
+    }
+    Write-Host "  installing $Name requirements (this can take a minute) ..." -ForegroundColor Cyan
+    $out = & $pip install -r (Join-Path $dir "requirements.txt") 2>&1
+    $out | ForEach-Object { Write-Host $_ }
+    if ($LASTEXITCODE -ne 0) {
+        Write-Host "ERROR: failed to install requirements for $Name." -ForegroundColor Red
+        exit 1
+    }
+    return $py
+}
+
+# Resolve the Python interpreter for a service, repairing/creating a venv as needed.
+function Get-ServicePython {
+    param(
+        [string]$Name,
+        [string[]]$Modules
+    )
+    $dir    = Join-Path $root $Name
+    $venvPy = Join-Path $dir ".venv\Scripts\python.exe"
+
+    # 1. Project venv with all dependencies present.
+    if ((Test-Path $venvPy) -and (Test-PythonModules $venvPy $Modules)) {
+        return $venvPy
+    }
+
+    # 2. Project venv exists but is missing packages - repair it.
+    if (Test-Path $venvPy) {
+        Write-Host "  repairing $Name venv (dependencies missing) ..." -ForegroundColor Cyan
+        $out = & (Join-Path $dir ".venv\Scripts\pip.exe") install -r (Join-Path $dir "requirements.txt") 2>&1
+        $out | ForEach-Object { Write-Host $_ }
+        if ($LASTEXITCODE -ne 0) {
+            Write-Host "ERROR: failed to repair $Name venv." -ForegroundColor Red
+            exit 1
+        }
+        return $venvPy
+    }
+
+    # 3. No venv: fall back to system python only if it already has the deps.
+    $sysPy = Get-Command python -ErrorAction SilentlyContinue
+    if ($sysPy -and (Test-PythonModules $sysPy.Source $Modules)) {
+        return $sysPy.Source
+    }
+
+    # 4. Nothing usable - create a fresh venv and install everything.
+    return (New-PythonEnv $Name)
+}
+
+$backendModules  = @('fastapi', 'uvicorn', 'pymysql', 'sqlalchemy', 'passlib', 'bcrypt', 'web3', 'eth_abi', 'xgboost', 'sklearn', 'numpy', 'pandas', 'joblib', 'websockets', 'httpx', 'dotenv', 'pydantic', 'pydantic_settings', 'email_validator')
+$forecastModules = @('fastapi', 'uvicorn', 'pydantic', 'pandas', 'numpy', 'sklearn', 'xgboost', 'joblib', 'yfinance', 'requests', 'xlrd')
+
+# ---------------------------------------------------------------------------
+# 3. Optional first-time setup (force a full install + frontend npm install)
+# ---------------------------------------------------------------------------
+if ($Setup) {
+    foreach ($name in @("backend", "crypto-forecast")) {
+        New-PythonEnv $name | Out-Null
     }
 
     Write-Host "  installing frontend dependencies ..." -ForegroundColor Cyan
@@ -93,17 +164,14 @@ if ($Setup) {
 }
 
 # ---------------------------------------------------------------------------
-# 3. Launch each service in its own window
+# 4. Launch each service in its own window
 # ---------------------------------------------------------------------------
 $backendDir  = Join-Path $root "backend"
 $forecastDir = Join-Path $root "crypto-forecast"
 $frontendDir = Join-Path $root "frontend"
 
-# Prefer each project's venv; fall back to system python.
-$backendPy  = Join-Path $backendDir ".venv\Scripts\python.exe"
-$forecastPy = Join-Path $forecastDir ".venv\Scripts\python.exe"
-if (-not (Test-Path $backendPy))  { $backendPy  = "python" }
-if (-not (Test-Path $forecastPy)) { $forecastPy = "python" }
+$backendPy  = Get-ServicePython "backend" $backendModules
+$forecastPy = Get-ServicePython "crypto-forecast" $forecastModules
 
 function Start-Window {
     param(

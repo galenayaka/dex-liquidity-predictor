@@ -171,3 +171,13 @@ class MonitorService:
                 )
                 await self._ws.broadcast(alert.model_dump())
                 logger.info("Alert [%s] %s", prediction.alert_level, prediction.message)
+
+        # Push the latest pool snapshot so clients that connected while the
+        # store was still empty (e.g. during a reload) recover on the next
+        # scan, and so the pool table stays live.
+        await self._ws.broadcast(
+            {
+                "type": "snapshot",
+                "data": [s.pool.model_dump() for s in self._store.all_latest()],
+            }
+        )

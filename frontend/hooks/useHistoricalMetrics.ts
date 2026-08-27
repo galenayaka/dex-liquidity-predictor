@@ -36,6 +36,10 @@ export function useHistoricalMetrics(
     let cancelled = false;
     setLoading(true);
     setError(null);
+    // Reset the previous pool's points so the chart remounts cleanly instead
+    // of trying to append a different pool's series (which crashes
+    // lightweight-charts when timestamps go backwards).
+    setPoints([]);
 
     const url = `${API_URL}/api/v1/metrics/${encodeURIComponent(
       poolAddress,
