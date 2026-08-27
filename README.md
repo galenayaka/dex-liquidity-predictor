@@ -219,7 +219,9 @@ risk signal**.
 3. **Predict** — `LiquidityPredictor` loads a serialized `.pkl` model when
    present, otherwise falls back to a deterministic mock inference.
 4. **Store** — `save_metrics_to_db` writes the metric to MySQL
-   (best-effort; the dashboard keeps working if the DB is offline).
+   (best-effort; the dashboard keeps working if the DB is offline). The
+   historical-metrics endpoint falls back to the in-memory snapshot store when
+   MySQL has no rows for a pool.
 5. **Broadcast** — push the event + prediction to every `/ws` client.
 
 ### Price-impact mathematics (Uniswap v3)
@@ -558,8 +560,11 @@ dex-liquidity-predictor/
 | `frontend/.env.example`    | `NEXT_PUBLIC_WS_URL`, `NEXT_PUBLIC_API_URL`, `NEXT_PUBLIC_FORECAST_URL`           |
 
 > **Note on `CORS_ORIGINS`:** it is a JSON list — e.g.
-> `CORS_ORIGINS=["http://localhost:3000","http://127.0.0.1:3000"]` — because
-> pydantic-settings v2 requires JSON for list fields.
+> `CORS_ORIGINS=["http://localhost:3000","http://127.0.0.1:3000","http://localhost","http://127.0.0.1"]` —
+> because pydantic-settings v2 requires JSON for list fields. Keep the port-80
+> origins (`http://localhost` / `http://127.0.0.1`) when serving the static
+> export from `public/` (section 14), otherwise the browser blocks REST calls
+> such as the historical-metrics fetch.
 
 ---
 
@@ -570,17 +575,23 @@ dex-liquidity-predictor/
 From the project root:
 
 ```powershell
-# First time only — creates Python venvs + installs everything + Node deps
-powershell -ExecutionPolicy Bypass -File .\start-all.ps1 -Setup
-
-# Every time after
 powershell -ExecutionPolicy Bypass -File .\start-all.ps1
 ```
 
 This opens three windows (backend :8000, forecast :8100, dashboard :3000).
 Open http://localhost:3000. Close the windows (or Ctrl+C) to stop.
 
-> Requires Python 3.11+ and Node.js. `-Setup` installs Node deps via `npm.cmd`.
+The launcher is **self-healing**: it verifies each service's Python
+dependencies, creates or repairs a per-service `.venv` (running
+`pip install -r requirements.txt`) when anything is missing, and copies the
+`.env` files from their examples if they don't exist. Use `-Setup` only to
+force a full reinstall (Python requirements + `npm install`):
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\start-all.ps1 -Setup
+```
+
+> Requires Python 3.11+ and Node.js.
 
 ### Manual (three terminals)
 
@@ -630,6 +641,12 @@ Copy-Item "out\_next" -Destination $pub -Recurse -Force
 
 Then visit `http://localhost/dex-liquidity-predictor/public/`.
 
+> Make sure `backend/.env` includes `http://localhost` and `http://127.0.0.1`
+> in `CORS_ORIGINS`. The static export's browser origin is `http://localhost`
+> (port 80); without it in the allow-list the browser blocks REST calls to
+> `:8000` (the WebSocket still works, but historical metrics / forecasts show
+> "unavailable").
+
 ---
 
 ## 15. Testing
@@ -655,9 +672,17 @@ round-trips, direction, magnitude, zero-liquidity guard).
   `NEXT_PUBLIC_WS_URL` is wrong. Check `ws://localhost:8000/ws`.
 - **Backend crashes on startup with `SettingsError: cors_origins`** — your
   `.env` has a comma-separated CORS list; use JSON (see section 12).
-- **Backend needs MySQL?** — no. It starts fine without a database; DB
-  writes fail silently and the dashboard keeps working. The database is only for
-  persistence.
+- **Backend needs MySQL?** — no. It starts fine without a database; historical
+  metrics fall back to the in-memory snapshot store when MySQL is offline or
+  has no rows, so the dashboard works end-to-end in mock mode. MySQL is only
+  for persistence across restarts.
+- **"Historical data unavailable — start backend + MySQL"** — either the
+  backend isn't running on :8000, or (when using the static export from
+  `public/`) `CORS_ORIGINS` is missing the `http://localhost` /
+  `http://127.0.0.1` origins (sections 12 and 14).
+- **Pools view stuck on "Awaiting pool data from server…"** — the backend
+  re-sends the pool snapshot after every monitor scan (30s), so wait a moment
+  or refresh. If it persists, the backend WebSocket isn't reachable.
 - **`npm`/`npm.cmd` not recognized in an old terminal** — Node was installed
   after that terminal opened. Open a new terminal (or run `start-all.ps1`,
   which refreshes PATH).

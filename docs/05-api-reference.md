@@ -19,6 +19,10 @@ except the WebSocket endpoint `/ws`. Interactive docs: `/docs`.
 | POST | `/api/v1/users/register` | Register a user (bcrypt-hashed password) |
 | WS | `/ws` | Real-time alerts, snapshots, events, bot state |
 
+`GET /api/v1/metrics/{pool_address}` returns persisted `liquidity_metrics`
+rows; when a pool has none (mock mode, fresh install, or MySQL offline) it
+falls back to the in-memory snapshot history so the chart still renders.
+
 ### 1.1 Price-impact simulation
 
 ```http

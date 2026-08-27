@@ -76,6 +76,7 @@ back to a transparent rule-based heuristic.
 | GET  | `/api/v1/pools` | Latest snapshot for every watched pool |
 | GET  | `/api/v1/pools/{address}` | Latest snapshot for one pool |
 | GET  | `/api/v1/pools/{address}/history` | Liquidity/price history |
+| GET  | `/api/v1/metrics/{pool_address}` | Historical liquidity points (DB + in-memory fallback) |
 | POST | `/api/v1/pools/{address}/price-impact` | Simulate a swap's price impact |
 | GET  | `/api/v1/predictions/{address}` | Latest drain prediction |
 | GET  | `/api/v1/predictions` | All latest predictions |
