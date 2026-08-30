@@ -1,5 +1,5 @@
 import { JetBrains_Mono } from "next/font/google";
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import type { ReactNode } from "react";
 import ThemeProvider from "@/components/ThemeProvider";
 import "./globals.css";
@@ -14,6 +14,12 @@ export const metadata: Metadata = {
   title: "DEX Liquidity Predictor",
   description:
     "Predictive liquidity & price impact analytics for Uniswap v3 pools",
+};
+
+export const viewport: Viewport = {
+  width: "device-width",
+  initialScale: 1,
+  themeColor: "#000000",
 };
 
 export default function RootLayout({

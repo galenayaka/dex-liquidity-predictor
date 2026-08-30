@@ -54,7 +54,7 @@ export default function Sidebar({
   const statusInfo = statusStyles(status);
 
   return (
-    <aside className="flex w-56 shrink-0 flex-col border-r border-noir-line bg-black">
+    <aside className="flex h-full w-56 shrink-0 flex-col border-r border-noir-line bg-black">
       <div className="border-b border-noir-line p-3">
         <h1 className="text-sm font-bold uppercase leading-tight tracking-[0.18em] text-noir-amber text-glow">
           DEX Liquidity

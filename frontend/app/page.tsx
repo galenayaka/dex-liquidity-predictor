@@ -72,6 +72,7 @@ export default function Dashboard() {
     ticker: string;
     ts: number;
   } | null>(null);
+  const [sidebarOpen, setSidebarOpen] = useState(false);
   const { status, lastMessage, messages } = useWebSocket();
 
   const pools = useMemo<PoolState[]>(() => {
@@ -149,16 +150,73 @@ export default function Dashboard() {
     setPredictRequest({ ticker, ts: Date.now() });
   };
 
+  const handleNavigate = (next: View) => {
+    setView(next);
+    setSidebarOpen(false);
+  };
+
   return (
     <div className="flex h-screen w-full flex-col bg-black text-noir-text">
-      <div className="flex min-h-0 flex-1">
-        <Sidebar
-          status={status}
-          active={view}
-          onNavigate={setView}
-          monitorActive={predictRequest?.ticker ?? "btc"}
-          onPredictTicker={handlePredictTicker}
+      {/* Mobile top bar — the sidebar is always visible on lg+ screens. */}
+      <header className="flex items-center justify-between border-b border-noir-line bg-black px-3 py-2 lg:hidden">
+        <button
+          type="button"
+          onClick={() => setSidebarOpen(true)}
+          aria-label="Open navigation"
+          aria-expanded={sidebarOpen}
+          className="border border-noir-line px-2 py-1 text-xs uppercase tracking-wider text-noir-muted hover:border-noir-line2 hover:text-noir-text"
+        >
+          ☰ Menu
+        </button>
+        <h1 className="text-xs font-bold uppercase tracking-[0.18em] text-noir-amber text-glow">
+          DEX Liquidity Predictor
+        </h1>
+        <span
+          className={`h-2 w-2 rounded-full ${
+            status === "open"
+              ? "bg-noir-orange dot-glow animate-pulse"
+              : "bg-noir-line"
+          }`}
+          aria-hidden="true"
         />
+      </header>
+
+      <div className="flex min-h-0 flex-1">
+        {/* Desktop sidebar */}
+        <div className="hidden lg:block">
+          <Sidebar
+            status={status}
+            active={view}
+            onNavigate={setView}
+            monitorActive={predictRequest?.ticker ?? "btc"}
+            onPredictTicker={handlePredictTicker}
+          />
+        </div>
+
+        {/* Mobile sidebar overlay */}
+        {sidebarOpen && (
+          <div
+            className="fixed inset-0 z-50 lg:hidden"
+            role="dialog"
+            aria-modal="true"
+            aria-label="Navigation"
+          >
+            <div
+              className="absolute inset-0 bg-black/70"
+              onClick={() => setSidebarOpen(false)}
+              aria-hidden="true"
+            />
+            <div className="absolute inset-y-0 left-0 w-56 shadow-xl">
+              <Sidebar
+                status={status}
+                active={view}
+                onNavigate={handleNavigate}
+                monitorActive={predictRequest?.ticker ?? "btc"}
+                onPredictTicker={handlePredictTicker}
+              />
+            </div>
+          </div>
+        )}
 
         <main className="flex-1 overflow-y-auto">
         <div className="space-y-3 p-3">
@@ -178,6 +236,29 @@ export default function Dashboard() {
                 : "—"}
             </span>
           </header>
+
+          {status !== "open" && (
+            <div
+              role="status"
+              className="flex items-center gap-2 border border-noir-line2 bg-noir-panel2 px-3 py-2 text-xs text-noir-muted"
+            >
+              <span
+                className={`h-2 w-2 rounded-full ${
+                  status === "connecting"
+                    ? "bg-noir-amber animate-pulse"
+                    : status === "error"
+                      ? "bg-noir-blood"
+                      : "bg-noir-line"
+                }`}
+                aria-hidden="true"
+              />
+              {status === "connecting"
+                ? "Connecting to live data…"
+                : status === "error"
+                  ? "Connection error — retrying…"
+                  : "Live data disconnected — retrying…"}
+            </div>
+          )}
 
           <AlertBanner event={latestEvent} alert={latestAlert} />
 
