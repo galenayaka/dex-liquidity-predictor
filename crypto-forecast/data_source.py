@@ -69,12 +69,33 @@ def fetch_crypto_binance(symbol: str, days: int = 1460) -> pd.DataFrame:
     return df.sort_index()
 
 
+_YF_USER_AGENT = (
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+    "AppleWebKit/537.36 (KHTML, like Gecko) "
+    "Chrome/120.0.0.0 Safari/537.36"
+)
+
+
+def _yf_session():
+    """Return a requests session with a modern browser User-Agent.
+
+    Yahoo Finance returns HTTP 429 for yfinance's default (very old) Chrome
+    user-agent, so we override it with a current one.
+    """
+    import requests
+
+    session = requests.Session()
+    session.headers.update({"User-Agent": _YF_USER_AGENT})
+    return session
+
+
 def fetch_crypto_yfinance(symbol: str, period: str = "4y") -> pd.DataFrame:
     """Daily OHLCV for a crypto symbol via yfinance (fallback)."""
     import yfinance as yf
 
     raw = yf.download(
-        symbol, period=period, interval="1d", auto_adjust=True, progress=False
+        symbol, period=period, interval="1d", auto_adjust=True, progress=False,
+        session=_yf_session(),
     )
     if raw is None or raw.empty:
         raise RuntimeError(f"yfinance returned no data for {symbol}")
@@ -103,7 +124,8 @@ def fetch_yfinance_series(symbol: str, period: str = "4y") -> pd.Series:
     import yfinance as yf
 
     raw = yf.download(
-        symbol, period=period, interval="1d", auto_adjust=True, progress=False
+        symbol, period=period, interval="1d", auto_adjust=True, progress=False,
+        session=_yf_session(),
     )
     if raw is None or raw.empty:
         raise RuntimeError(f"yfinance returned no data for {symbol}")
